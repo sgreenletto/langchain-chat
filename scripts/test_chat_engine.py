@@ -106,8 +106,7 @@ async def main() -> int:
 
         if _is_placeholder(config.api_key) or _is_placeholder(config.api_base_url):
             print(
-                "未配置有效 LLM 环境，"
-                "跳过外部非流式、历史、SystemMessage 和流式调用。"
+                "未配置有效 LLM 环境，跳过外部非流式、历史、SystemMessage 和流式调用。"
             )
             return 0
 

@@ -188,10 +188,12 @@ async def _chat_loop(app: Any, session: Session) -> None:
             continue
 
         usage = final_event.usage if final_event else TokenUsage()
-        message_count_before = len(await app.session_manager.load_langchain_messages(
-            session,
-            include_system=False,
-        ))
+        message_count_before = len(
+            await app.session_manager.load_langchain_messages(
+                session,
+                include_system=False,
+            )
+        )
         await app.session_manager.save_user_message(session, user_input)
         _, session = await app.session_manager.save_ai_message_and_update_session(
             session=session,

@@ -19,9 +19,7 @@ async def main() -> None:
 
     engine = ChatEngine(config)
     try:
-        result = await engine.generate(
-            [HumanMessage(content="请用一句话介绍你自己。")]
-        )
+        result = await engine.generate([HumanMessage(content="请用一句话介绍你自己。")])
     except Exception as exc:
         print(f"LangChain 示例请求失败：{type(exc).__name__}")
         return

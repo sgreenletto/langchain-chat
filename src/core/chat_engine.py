@@ -90,6 +90,14 @@ class ChatEngine:
     def for_model(self, model_alias: str) -> "ChatEngine":
         """Return a stateless engine instance using one configured model alias."""
         self.config.validate_model_alias(model_alias, require_available=True)
+        logger.info(
+            "Chat engine model selected",
+            extra={
+                "model_alias": model_alias,
+                "operation": "switch_model",
+                "status": "ok",
+            },
+        )
         return ChatEngine(self.config, model_alias=model_alias)
 
     async def generate(
@@ -108,27 +116,54 @@ class ChatEngine:
                 "model_alias": runtime_config.alias,
                 "model": runtime_config.model,
                 "call_type": "non_stream",
+                "timeout": runtime_config.timeout,
+                "max_retries": runtime_config.max_retries,
             },
         )
         try:
             response = await model.ainvoke(messages)
         except Exception as exc:
+            if self._is_timeout_error(exc):
+                logger.warning(
+                    "LLM call timed out after configured retries",
+                    extra={
+                        "model_alias": runtime_config.alias,
+                        "model": runtime_config.model,
+                        "call_type": "non_stream",
+                        "timeout": runtime_config.timeout,
+                        "max_retries": runtime_config.max_retries,
+                        "status": "timeout",
+                        "error_type": type(exc).__name__,
+                    },
+                )
             logger.exception(
                 "LLM call failed",
                 extra={
                     "model_alias": runtime_config.alias,
                     "model": runtime_config.model,
                     "call_type": "non_stream",
+                    "max_retries": runtime_config.max_retries,
+                    "status": "failed",
                     "error_type": type(exc).__name__,
                 },
             )
             raise
 
         content = self._content_to_text(response.content)
-        return ChatEngineResult(
+        result = ChatEngineResult(
             content=content,
             usage=self._extract_usage(response),
         )
+        logger.info(
+            "LLM call completed",
+            extra={
+                "model_alias": runtime_config.alias,
+                "model": runtime_config.model,
+                "call_type": "non_stream",
+                "status": "ok",
+            },
+        )
+        return result
 
     async def stream(
         self,
@@ -146,6 +181,8 @@ class ChatEngine:
                 "model_alias": runtime_config.alias,
                 "model": runtime_config.model,
                 "call_type": "stream",
+                "timeout": runtime_config.timeout,
+                "max_retries": runtime_config.max_retries,
             },
         )
         final_usage = TokenUsage()
@@ -158,17 +195,41 @@ class ChatEngine:
                 if content:
                     yield ChatStreamEvent(content=content)
         except Exception as exc:
+            if self._is_timeout_error(exc):
+                logger.warning(
+                    "Streaming LLM call timed out after configured retries",
+                    extra={
+                        "model_alias": runtime_config.alias,
+                        "model": runtime_config.model,
+                        "call_type": "stream",
+                        "timeout": runtime_config.timeout,
+                        "max_retries": runtime_config.max_retries,
+                        "status": "timeout",
+                        "error_type": type(exc).__name__,
+                    },
+                )
             logger.exception(
                 "Streaming LLM call failed",
                 extra={
                     "model_alias": runtime_config.alias,
                     "model": runtime_config.model,
                     "call_type": "stream",
+                    "max_retries": runtime_config.max_retries,
+                    "status": "failed",
                     "error_type": type(exc).__name__,
                 },
             )
             raise
 
+        logger.info(
+            "Streaming LLM call completed",
+            extra={
+                "model_alias": runtime_config.alias,
+                "model": runtime_config.model,
+                "call_type": "stream",
+                "status": "ok",
+            },
+        )
         yield ChatStreamEvent(usage=final_usage, is_final=True)
 
     async def close(self) -> None:
@@ -263,6 +324,11 @@ class ChatEngine:
             return int(value)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _is_timeout_error(exc: Exception) -> bool:
+        name = type(exc).__name__.lower()
+        return isinstance(exc, TimeoutError) or "timeout" in name
 
     @classmethod
     def _content_to_text(cls, content: str | list[Any] | Any) -> str:

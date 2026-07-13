@@ -1,11 +1,14 @@
 """Preset management business layer."""
 
+import logging
 from pathlib import Path
 
 import yaml
 
 from models.schemas import Preset, utc_now
 from storage.base import StorageBackend
+
+logger = logging.getLogger(__name__)
 
 
 class PresetManager:
@@ -56,6 +59,11 @@ class PresetManager:
             existing_builtin_names.add(name)
             imported_count += 1
 
+        if imported_count:
+            logger.info(
+                "Built-in presets loaded",
+                extra={"operation": "load_builtin_presets", "status": "ok"},
+            )
         return imported_count
 
     async def list_presets(self, user_id: int) -> list[Preset]:
@@ -79,7 +87,7 @@ class PresetManager:
         normalized_prompt = self._require_text(system_prompt, "系统提示词不能为空。")
         await self._ensure_no_builtin_name_conflict(normalized_name)
 
-        return await self.backend.save_preset(
+        saved = await self.backend.save_preset(
             Preset(
                 id=0,
                 user_id=user_id,
@@ -89,6 +97,15 @@ class PresetManager:
                 is_builtin=False,
             )
         )
+        logger.info(
+            "Custom preset created",
+            extra={
+                "user_id": user_id,
+                "operation": "create_preset",
+                "status": "ok",
+            },
+        )
+        return saved
 
     async def update_preset(
         self,
@@ -114,14 +131,39 @@ class PresetManager:
             created_at=preset.created_at,
             updated_at=utc_now(),
         )
-        return await self.backend.save_preset(updated_preset)
+        saved = await self.backend.save_preset(updated_preset)
+        logger.info(
+            "Custom preset updated",
+            extra={
+                "user_id": user_id,
+                "operation": "update_preset",
+                "status": "ok",
+            },
+        )
+        return saved
 
     async def delete_preset(self, preset_id: int, user_id: int) -> Preset:
         """Delete a user-defined preset."""
         preset = await self._require_owned_custom_preset(preset_id, user_id)
         deleted = await self.backend.delete_preset(preset.id)
         if not deleted:
+            logger.error(
+                "Custom preset delete failed",
+                extra={
+                    "user_id": user_id,
+                    "operation": "delete_preset",
+                    "status": "failed",
+                },
+            )
             raise ValueError(f"删除预设失败：id={preset.id}")
+        logger.info(
+            "Custom preset deleted",
+            extra={
+                "user_id": user_id,
+                "operation": "delete_preset",
+                "status": "ok",
+            },
+        )
         return preset
 
     def _load_presets_yaml(self) -> dict:
@@ -132,6 +174,15 @@ class PresetManager:
             with self.presets_path.open("r", encoding="utf-8") as file:
                 data = yaml.safe_load(file) or {}
         except yaml.YAMLError as exc:
+            logger.exception(
+                "Built-in preset YAML parse failed",
+                extra={
+                    "operation": "load_builtin_presets",
+                    "status": "failed",
+                    "error_type": type(exc).__name__,
+                    "path": str(self.presets_path),
+                },
+            )
             raise ValueError("内置预设 YAML 格式错误。") from exc
 
         if not isinstance(data, dict):

@@ -1,6 +1,7 @@
 """Session management business layer."""
 
 import asyncio
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +18,8 @@ except ImportError:
     from core.config_manager import AppConfig, ConfigError, get_config
     from models.schemas import Message, Preset, Session, User, utc_now
     from storage.base import StorageBackend
+
+logger = logging.getLogger(__name__)
 
 
 class SessionManager:
@@ -45,7 +48,7 @@ class SessionManager:
         await self._require_user(user_id)
         if preset_id is not None:
             await self._require_visible_preset(user_id, preset_id)
-        return await self.backend.save_session(
+        saved = await self.backend.save_session(
             Session(
                 id=0,
                 user_id=user_id,
@@ -54,11 +57,27 @@ class SessionManager:
                 preset_id=preset_id,
             )
         )
+        logger.info(
+            "Session created",
+            extra={
+                "user_id": user_id,
+                "session_id": saved.id,
+                "model": model_name,
+                "operation": "create_session",
+                "status": "ok",
+            },
+        )
+        return saved
 
     async def list_sessions(self, user_id: int) -> list[Session]:
         """List sessions owned by a user."""
         await self._require_user(user_id)
-        return await self.backend.list_sessions(user_id)
+        sessions = await self.backend.list_sessions(user_id)
+        logger.info(
+            "User sessions listed",
+            extra={"user_id": user_id, "operation": "list_sessions", "status": "ok"},
+        )
+        return sessions
 
     async def list_user_sessions(self, user_id: int) -> list[Session]:
         """Backward-compatible alias for listing user sessions."""
@@ -75,7 +94,17 @@ class SessionManager:
     ) -> list[Message]:
         """Return messages for a user-owned session in chronological order."""
         session = await self._require_session_owner(user_id, session_id)
-        return await self.backend.list_messages(session.id)
+        messages = await self.backend.list_messages(session.id)
+        logger.info(
+            "Session messages loaded",
+            extra={
+                "user_id": user_id,
+                "session_id": session.id,
+                "operation": "load_session_messages",
+                "status": "ok",
+            },
+        )
+        return messages
 
     async def search_messages(self, user_id: int, keyword: str) -> list[Message]:
         """Search messages for one user after validating input."""
@@ -83,7 +112,12 @@ class SessionManager:
         normalized_keyword = keyword.strip()
         if not normalized_keyword:
             return []
-        return await self.backend.search_messages(user_id, normalized_keyword)
+        results = await self.backend.search_messages(user_id, normalized_keyword)
+        logger.info(
+            "Messages searched",
+            extra={"user_id": user_id, "operation": "search_messages", "status": "ok"},
+        )
+        return results
 
     async def get_user_session(self, user_id: int, session_id: int) -> Session | None:
         """Return a session only when it belongs to the user."""
@@ -183,7 +217,9 @@ class SessionManager:
         try:
             result = await chat_engine.generate(
                 [
-                    SystemMessage(content="请为用户的第一句话生成不超过15字的会话标题。"),
+                    SystemMessage(
+                        content="请为用户的第一句话生成不超过15字的会话标题。"
+                    ),
                     HumanMessage(content=first_user_message),
                 ]
             )
@@ -213,7 +249,17 @@ class SessionManager:
             created_at=session.created_at,
             updated_at=utc_now(),
         )
-        return await self.backend.save_session(updated)
+        saved = await self.backend.save_session(updated)
+        logger.info(
+            "Session renamed",
+            extra={
+                "user_id": user_id,
+                "session_id": session_id,
+                "operation": "rename_session",
+                "status": "ok",
+            },
+        )
+        return saved
 
     async def rename_session(
         self,
@@ -229,7 +275,25 @@ class SessionManager:
         session = await self._require_session_owner(user_id, session_id)
         deleted = await self.backend.delete_session(session.id)
         if not deleted:
+            logger.error(
+                "Session delete failed",
+                extra={
+                    "user_id": user_id,
+                    "session_id": session.id,
+                    "operation": "delete_session",
+                    "status": "failed",
+                },
+            )
             raise ValueError("删除会话失败。")
+        logger.info(
+            "Session deleted",
+            extra={
+                "user_id": user_id,
+                "session_id": session.id,
+                "operation": "delete_session",
+                "status": "ok",
+            },
+        )
         return session
 
     async def update_session_model(
@@ -258,7 +322,18 @@ class SessionManager:
             created_at=session.created_at,
             updated_at=utc_now(),
         )
-        return await self.backend.save_session(updated)
+        saved = await self.backend.save_session(updated)
+        logger.info(
+            "Session model updated",
+            extra={
+                "user_id": user_id,
+                "session_id": session_id,
+                "model": saved.model_name,
+                "operation": "update_session_model",
+                "status": "ok",
+            },
+        )
+        return saved
 
     async def export_session_markdown(
         self,
@@ -273,8 +348,31 @@ class SessionManager:
         filename = await self._build_unique_export_filename(export_dir, session.title)
         markdown = self._build_markdown(user, session, preset, messages)
 
-        await asyncio.to_thread(export_dir.mkdir, parents=True, exist_ok=True)
-        await asyncio.to_thread(filename.write_text, markdown, "utf-8")
+        try:
+            await asyncio.to_thread(export_dir.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(filename.write_text, markdown, "utf-8")
+        except OSError as exc:
+            logger.exception(
+                "Session export failed",
+                extra={
+                    "user_id": user.id,
+                    "session_id": session_id,
+                    "operation": "export_session",
+                    "status": "failed",
+                    "error_type": type(exc).__name__,
+                },
+            )
+            raise
+        logger.info(
+            "Session exported",
+            extra={
+                "user_id": user.id,
+                "session_id": session_id,
+                "operation": "export_session",
+                "status": "ok",
+                "path": str(filename),
+            },
+        )
         return filename
 
     async def _require_user(self, user_id: int) -> None:

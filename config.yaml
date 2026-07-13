@@ -5,7 +5,7 @@
 app:
   name: langchain-chat
   version: 0.1.0
-  current_step: "Step 11  MySQL 存储后端"
+  current_step: "Step 12 File 后端与日志系统"
 
 llm:
   default_model: default
@@ -44,7 +44,7 @@ storage:
     pool_min_size: 1
     pool_max_size: 5
   file:
-    base_dir: data/users
+    path: data/filestore
     encoding: utf-8
 
 conversation:

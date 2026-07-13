@@ -181,3 +181,22 @@
 - MySQL 集成测试状态：当前环境未声明可用的外部 MySQL 测试服务，未伪造集成测试通过。
 - 用户待手工验证项目：准备 MySQL 服务和测试数据库后设置 `RUN_MYSQL_TESTS=1`、`MYSQL_TEST_DATABASE` 及 MySQL 连接环境变量，运行 MySQL 初始化和集成测试；将 `storage.type` 切换为 `mysql` 后启动 TUI 验证用户、预设、会话、搜索、导出和模型切换流程。
 - commit 信息：`feat: step 11 - 实现 MySQL 异步存储后端`
+
+## Step 12：File 后端与结构化日志
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- Step 12 目标：实现第三种存储后端 `FileBackend`，激活 `storage.type=file`，接入真正 JSONL 文件日志，并为用户、预设、会话、模型调用、存储初始化和 TUI 关键操作补充日志与错误处理。
+- 阅读的文档：`D:\study\暑期实训\20260713\docs\需求说明文档.md`、`D:\study\暑期实训\20260713\docs\实施步骤计划.md`、`D:\study\暑期实训\20260713\docs\需求变更与扩展登记.md`、`D:\study\暑期实训\20260713\langchain-docs\langchain-docs\Step12-File后端与日志系统教学文档(1).md`。
+- 开始前仓库状态：Git 根目录为 `D:/project/langchain-chat`，当前分支为 `main`，存在 `step-11-mysql` tag；`git status --short` 初始显示 `.env.example`、`pyproject.toml`、`uv.lock` 已有未提交修改，内容为 MySQL 示例账号和 `cryptography` 依赖相关变更，已保留未回退。
+- 实际修改文件：`.gitignore`、`config.yaml`、`config/logging.yaml`、`docs/ai_usage_log.md`、`src/core/chat_engine.py`、`src/core/config_manager.py`、`src/core/logging_utils.py`、`src/core/preset_manager.py`、`src/core/session_manager.py`、`src/core/user_manager.py`、`src/main.py`、`src/storage/factory.py`、`src/storage/file_backend.py`、`src/ui/tui/app.py`、`tests/test_file_backend.py`。为满足项目级 `ruff format --check .`，还由 ruff 对 `examples/example3_langchain.py`、`scripts/test_chat_engine.py`、`src/ui/tui/chat_view.py` 做了机械格式化。
+- FileBackend 设计：继承当前 `StorageBackend` 的真实 `save_*` 接口；使用 `users.json`、`sessions.json`、`messages.json`、`presets.json`、`user_configs.json` 五个 JSON 文件；根结构固定为列表；datetime 使用 ISO 8601；新增 ID 使用当前最大 ID 加一；文件读写通过 `asyncio.to_thread` 执行；写入使用临时文件 + `os.replace`；JSON 损坏、根结构错误或读写失败会记录日志并向上抛出异常，不静默覆盖原文件；删除用户和会话手动级联；删除预设时置空用户默认预设和会话预设引用；搜索消息先限制在用户会话集合内。
+- 日志设计和文档冲突处理：教学文档建议的“伪 JSON”管道格式未采用；按总需求实现 `core.logging_utils.JsonLineFormatter`，文件日志每行是可独立 `json.loads()` 的 JSON 对象，至少包含 `timestamp`、`level`、`logger`、`message`，并按上下文加入 `user_id`、`session_id`、`model`、`status`、`error_type` 等字段。控制台 handler 使用人类可读格式且默认 WARNING+，文件 handler 使用 `TimedRotatingFileHandler` 输出 JSONL。
+- 安全处理：日志不输出 `.env` 内容，不主动记录 API Key、Authorization、数据库密码或完整连接字符串；formatter 对敏感 key/文本做基础脱敏；默认不记录完整用户 Prompt、模型回复或 system prompt。
+- 实际执行命令及结果：`uv sync` 提权后通过，输出 `Resolved 64 packages`、`Checked 61 packages`；前置 `uv run pytest -q` 提权后通过，结果 `8 passed, 1 skipped`；最终 `uv run python -m compileall src scripts` 通过；`uv run ruff format --check .` 通过，输出 `38 files already formatted`；`uv run ruff check .` 通过，输出 `All checks passed!`；`uv run pytest -q` 通过，输出 `9 passed, 1 skipped`；`git diff --check` 退出码 0，仅有 Windows LF/CRLF 提示。
+- FileBackend 独立冒烟验证：使用 `tempfile.TemporaryDirectory()` 临时目录完成 initialize 创建五个文件、创建两个用户、用户名唯一性、创建会话、保存 human/ai 消息、消息顺序、用户隔离搜索、自定义预设、UserConfig、删除会话级联消息、删除用户级联相关数据、close、重新初始化后数据恢复；输出 `FileBackend smoke ok`。
+- 日志冒烟验证：使用临时日志文件加载 `config/logging.yaml`，写入 INFO 和可控 ERROR，逐行 `json.loads()` 成功，确认 ERROR 记录存在，确认未出现测试 API Key、Authorization、数据库密码，确认 `httpx`/`langchain` 的 INFO 日志未进入文件；另用 `src.main.setup_logging()` 确认真实 `logs/app.log` 可生成。
+- 未完成或需要人工验证项：未执行真实 LLM 调用；未执行交互式 TUI 全流程；未执行 MySQL 集成测试，需具备 MySQL 服务、`RUN_MYSQL_TESTS=1` 和有效测试库环境后人工验证。
+- 风险和后续 Step 13 建议：FileBackend 适合教学和小数据量，不具备多进程并发写事务保证；Step 13 可将当前冒烟脚本沉淀为更系统的后端契约测试，并补充日志 formatter 的单元测试、损坏 JSON 文件测试和 StorageFactory 配置错误测试。
+- 建议 commit：`feat: step 12 - File 后端与结构化日志`
+- 建议 tag：`step-12-logging-file`

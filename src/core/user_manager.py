@@ -44,7 +44,12 @@ class UserManager:
             username=normalized_username,
             default_model=default_model,
         )
-        return await self.backend.save_user(user)
+        saved = await self.backend.save_user(user)
+        logger.info(
+            "User created",
+            extra={"user_id": saved.id, "operation": "create_user", "status": "ok"},
+        )
+        return saved
 
     async def get_user(self, username: str) -> User | None:
         """Return a user by username, or None if it does not exist."""
@@ -73,7 +78,19 @@ class UserManager:
 
         deleted = await self.backend.delete_user(user.id)
         if not deleted:
+            logger.error(
+                "User delete failed",
+                extra={
+                    "user_id": user.id,
+                    "operation": "delete_user",
+                    "status": "failed",
+                },
+            )
             raise ValueError(f"删除用户 '{normalized_username}' 失败。")
+        logger.info(
+            "User deleted",
+            extra={"user_id": user.id, "operation": "delete_user", "status": "ok"},
+        )
         return user
 
     async def update_default_model(self, user_id: int, model_alias: str) -> User:
@@ -97,7 +114,17 @@ class UserManager:
             created_at=user.created_at,
             updated_at=utc_now(),
         )
-        return await self.backend.save_user(updated)
+        saved = await self.backend.save_user(updated)
+        logger.info(
+            "User default model updated",
+            extra={
+                "user_id": saved.id,
+                "model": saved.default_model,
+                "operation": "update_default_model",
+                "status": "ok",
+            },
+        )
+        return saved
 
     def get_effective_default_model(self, user: User) -> str:
         """Return a valid configured model alias for a user's next session."""

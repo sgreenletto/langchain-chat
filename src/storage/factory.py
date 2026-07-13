@@ -1,9 +1,13 @@
 """Storage backend factory."""
 
+import logging
+
 try:
     from .base import StorageBackend
 except ImportError:
     from storage.base import StorageBackend
+
+logger = logging.getLogger(__name__)
 
 
 class StorageFactory:
@@ -28,6 +32,10 @@ class StorageFactory:
             except ImportError:
                 from storage.sqlite_backend import SQLiteBackend
 
+            logger.info(
+                "Storage backend selected",
+                extra={"storage_type": "sqlite", "status": "creating"},
+            )
             return SQLiteBackend()
         if normalized_type == "mysql":
             try:
@@ -35,8 +43,25 @@ class StorageFactory:
             except ImportError:
                 from storage.mysql_backend import MySQLBackend
 
+            logger.info(
+                "Storage backend selected",
+                extra={"storage_type": "mysql", "status": "creating"},
+            )
             return MySQLBackend()
         if normalized_type == "file":
-            raise NotImplementedError("File 存储后端将在 Step 12 实现。")
+            try:
+                from .file_backend import FileBackend
+            except ImportError:
+                from storage.file_backend import FileBackend
 
+            logger.info(
+                "Storage backend selected",
+                extra={"storage_type": "file", "status": "creating"},
+            )
+            return FileBackend()
+
+        logger.error(
+            "Unsupported storage backend type",
+            extra={"storage_type": storage_type, "status": "invalid"},
+        )
         raise ValueError(f"不支持的存储后端类型：{storage_type}")

@@ -98,7 +98,7 @@ class MySQLStorageSection(BaseModel):
 
 
 class FileStorageSection(BaseModel):
-    base_dir: str
+    path: str = "data/filestore"
     encoding: str = "utf-8"
 
 
@@ -186,8 +186,7 @@ class AppConfig(BaseModel):
         return [
             model
             for model in (
-                self.get_model_config(item.alias)
-                for item in self.llm.available_models
+                self.get_model_config(item.alias) for item in self.llm.available_models
             )
             if model.available
         ]

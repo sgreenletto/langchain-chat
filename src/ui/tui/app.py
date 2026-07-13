@@ -1,5 +1,7 @@
 """Rich-based TUI application."""
 
+import logging
+
 from rich.markup import escape
 from rich.table import Table
 
@@ -25,6 +27,8 @@ from ui.tui.widgets import (
     show_success,
     show_warning,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TUIApp(AbstractUI):
@@ -144,9 +148,7 @@ class TUIApp(AbstractUI):
             show_info("当前用户：未登录")
             return
 
-        show_info(
-            f"当前用户：{self.current_user.username}"
-        )
+        show_info(f"当前用户：{self.current_user.username}")
 
     async def _show_user_menu(self) -> None:
         while True:
@@ -185,6 +187,10 @@ class TUIApp(AbstractUI):
             return
 
         show_success(f"用户创建成功：{user.username}")
+        logger.info(
+            "TUI user created",
+            extra={"user_id": user.id, "operation": "create_user", "status": "ok"},
+        )
         if self.current_user is None:
             self.current_user = user
             self.current_session = None
@@ -229,6 +235,10 @@ class TUIApp(AbstractUI):
         self.current_user = user
         self.current_session = None
         show_success(f"已切换到用户：{user.username}")
+        logger.info(
+            "TUI user switched",
+            extra={"user_id": user.id, "operation": "switch_user", "status": "ok"},
+        )
 
     async def _delete_user(self) -> None:
         username = await self.get_user_input("请输入要删除的用户名：")
@@ -260,6 +270,14 @@ class TUIApp(AbstractUI):
 
         show_success(
             f"用户 '{deleted_user.username}' 已删除，关联数据已由数据库级联清理。"
+        )
+        logger.info(
+            "TUI user deleted",
+            extra={
+                "user_id": deleted_user.id,
+                "operation": "delete_user",
+                "status": "ok",
+            },
         )
 
     async def _show_preset_menu(self) -> None:
@@ -341,6 +359,14 @@ class TUIApp(AbstractUI):
             return
 
         show_success(f"预设创建成功：{preset.name}")
+        logger.info(
+            "TUI custom preset created",
+            extra={
+                "user_id": self.current_user.id,
+                "operation": "create_preset",
+                "status": "ok",
+            },
+        )
 
     async def _edit_preset(self) -> None:
         if self.current_user is None:
@@ -385,6 +411,14 @@ class TUIApp(AbstractUI):
             return
 
         show_success(f"预设已更新：{updated.name}")
+        logger.info(
+            "TUI custom preset updated",
+            extra={
+                "user_id": self.current_user.id,
+                "operation": "update_preset",
+                "status": "ok",
+            },
+        )
 
     async def _delete_preset(self) -> None:
         if self.current_user is None:
@@ -426,6 +460,14 @@ class TUIApp(AbstractUI):
             return
 
         show_success(f"预设“{deleted.name}”已删除")
+        logger.info(
+            "TUI custom preset deleted",
+            extra={
+                "user_id": self.current_user.id,
+                "operation": "delete_preset",
+                "status": "ok",
+            },
+        )
 
     async def _list_current_user_custom_presets(self, title: str) -> list[Preset]:
         if self.current_user is None:
@@ -572,6 +614,15 @@ class TUIApp(AbstractUI):
         self.current_session = session
         console.print(f"已加载会话: {session.title}", markup=False)
         console.print("选择开始对话可继续此会话")
+        logger.info(
+            "TUI session loaded",
+            extra={
+                "user_id": self.current_user.id if self.current_user else None,
+                "session_id": session.id,
+                "operation": "load_session",
+                "status": "ok",
+            },
+        )
 
     async def _show_session_messages(self) -> None:
         if self.current_user is None:
@@ -594,9 +645,7 @@ class TUIApp(AbstractUI):
         show_info(f"会话记录：{session.title}")
         for message in messages:
             role_name = self._display_message_role(message.role)
-            console.print(
-                f"[bold]{role_name}[/bold]：{escape(message.content)}"
-            )
+            console.print(f"[bold]{role_name}[/bold]：{escape(message.content)}")
         show_separator()
 
     async def _rename_session(self) -> None:
@@ -622,6 +671,15 @@ class TUIApp(AbstractUI):
         if self.current_session is not None and self.current_session.id == renamed.id:
             self.current_session = renamed
         show_success(f"会话已重命名：{renamed.title}")
+        logger.info(
+            "TUI session renamed",
+            extra={
+                "user_id": self.current_user.id,
+                "session_id": renamed.id,
+                "operation": "rename_session",
+                "status": "ok",
+            },
+        )
         await self._list_sessions()
 
     async def _delete_session(self) -> None:
@@ -653,6 +711,15 @@ class TUIApp(AbstractUI):
             self.current_session = None
             show_info("已清空当前会话状态。")
         show_success(f"会话“{deleted.title}”已删除。")
+        logger.info(
+            "TUI session deleted",
+            extra={
+                "user_id": self.current_user.id,
+                "session_id": deleted.id,
+                "operation": "delete_session",
+                "status": "ok",
+            },
+        )
 
     async def _export_session(self) -> None:
         if self.current_user is None:
@@ -670,9 +737,29 @@ class TUIApp(AbstractUI):
             )
         except ValueError as exc:
             await self.display_error(str(exc))
+            logger.error(
+                "TUI session export failed",
+                extra={
+                    "user_id": self.current_user.id,
+                    "session_id": session.id,
+                    "operation": "export_session",
+                    "status": "failed",
+                    "error_type": type(exc).__name__,
+                },
+            )
             return
 
         console.print(f"会话已导出: {export_path}", markup=False)
+        logger.info(
+            "TUI session exported",
+            extra={
+                "user_id": self.current_user.id,
+                "session_id": session.id,
+                "operation": "export_session",
+                "status": "ok",
+                "path": str(export_path),
+            },
+        )
 
     async def _read_session_selection(self, prompt: str) -> Session | None:
         if self.current_user is None:
@@ -750,9 +837,7 @@ class TUIApp(AbstractUI):
             )
             for message in session_messages:
                 role_name = self._display_message_role(message.role)
-                console.print(
-                    f"  [bold]{role_name}[/bold]：{escape(message.content)}"
-                )
+                console.print(f"  [bold]{role_name}[/bold]：{escape(message.content)}")
         show_separator()
 
     @staticmethod
@@ -812,6 +897,15 @@ class TUIApp(AbstractUI):
         self.current_user = updated_user
         show_success(f"当前用户默认模型已更新为：{model_alias}")
         show_info("该设置只影响后续新建会话，已有会话不会自动变化。")
+        logger.info(
+            "TUI default model updated",
+            extra={
+                "user_id": updated_user.id,
+                "model": model_alias,
+                "operation": "update_default_model",
+                "status": "ok",
+            },
+        )
 
     def _show_model_table(self) -> None:
         table = Table(title="模型列表", show_header=True, header_style="bold cyan")
