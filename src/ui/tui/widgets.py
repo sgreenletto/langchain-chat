@@ -13,10 +13,10 @@ prompt_session: PromptSession[str] | None = None
 
 
 def show_banner() -> None:
-    """Display the Step 2 startup banner."""
+    """Display the startup banner."""
     banner = (
         "[bold]langchain-chat[/bold]\n"
-        "Step 4：用户管理模块与 TUI 用户菜单\n"
+        "Step 5：预设管理\n"
         f"Python 版本：{platform.python_version()}\n"
         f"运行平台：{platform.platform()}"
     )
@@ -57,12 +57,20 @@ def _get_prompt_session() -> PromptSession[str]:
     return prompt_session
 
 
-async def read_text(prompt: str) -> str:
+async def read_text(prompt: str, default: str = "") -> str:
+    display_prompt = prompt
+    if default:
+        display_prompt = f"{prompt}（当前：{default}，直接回车保留）："
+
     try:
         session = _get_prompt_session()
-        return (await session.prompt_async(prompt)).strip()
+        value = (await session.prompt_async(display_prompt)).strip()
     except Exception:
-        return (await asyncio.to_thread(console.input, prompt)).strip()
+        value = (await asyncio.to_thread(console.input, display_prompt)).strip()
+
+    if default and not value:
+        return default
+    return value
 
 
 async def read_choice(prompt: str = "请选择菜单编号：") -> str:

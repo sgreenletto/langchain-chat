@@ -70,6 +70,10 @@ class StorageBackend(ABC):
         """Search messages for a user."""
 
     @abstractmethod
+    async def get_preset_by_id(self, preset_id: int) -> Preset | None:
+        """Return any preset by id."""
+
+    @abstractmethod
     async def save_preset(self, preset: Preset) -> Preset:
         """Create or update a preset."""
 

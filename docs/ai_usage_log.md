@@ -65,3 +65,44 @@
 - 未完成项目：本步骤不实现预设管理、会话管理、对话引擎或大模型调用。
 - 建议 commit：`feat: step 4 - 用户管理业务层、TUI 用户菜单与存储后端接入`
 - 建议 tag：`step-4-user-mgmt`
+
+## Step 5：预设管理模块与 TUI 预设菜单
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 内置与自定义预设设计：系统内置预设来自 `config/presets.yaml`，`user_id=None`、`is_builtin=True`、所有用户共享且只读；用户自定义预设归属当前用户，`is_builtin=False`，可创建、编辑、删除。
+- 幂等导入：启动时通过 PresetManager 读取 YAML，基于内置预设名称去重；第一次导入 YAML 数量，第二次导入 0。
+- save_preset bug 原因：旧风险是只判断 `id is None`，而项目新建模型使用 `id=0`；修复为 `not preset.id` 作为新增，并要求更新不存在 ID 时明确失败。
+- get_preset_by_id 最终修复：在 StorageBackend 增加 `get_preset_by_id` 抽象方法，SQLiteBackend 用参数化 SQL 实现，PresetManager 查询单个预设只使用该方法。
+- read_text 默认值：`read_text(prompt_text, default="")` 支持显示当前值；输入为空时返回默认值，保持 Step 4 默认行为兼容。
+- 权限和用户隔离：未登录不能操作预设管理；内置预设不能编辑或删除；用户只能查看自己的自定义预设和内置预设，不能跨用户修改或删除。
+- 自动验证结果：`PresetManager` 可导入；`SQLiteBackend.__abstractmethods__` 为 `frozenset()`；`compileall` 通过；应用可启动并退出，横幅显示 Step 5；真实 `app.db` 中内置预设数量为 5，重复启动未再次导入；临时数据库验证中第一次导入内置预设 5 个、第二次导入 0 个，`Preset(id=0)` 保存后 ID 大于 0，`get_preset_by_id` 可查询，自定义预设可更新和删除，alice/bob 私人预设互不可见；Ruff 和 Pytest 均通过；`git diff --check` 退出状态为 0，仅有 Windows 换行提示。
+- 用户待手工验证内容：查看内置预设；未登录时预设管理提示先创建或切换用户；创建自定义预设；编辑自定义预设并验证回车保留；尝试编辑/删除内置预设被拒绝；删除自定义预设需二次确认；重复启动后内置预设不重复导入。
+- 未完成项目：本步骤不实现聊天时选择预设，不调用 LLM，不实现 Step 6。
+- 建议 commit：`feat: step 5 - 预设管理业务层、TUI 预设菜单与内置预设导入`
+- 建议 tag：`step-5-presets`
+
+## Step 5 补充：编号系统修复
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 问题现象：预设列表中用户看到的编号直接显示为数据库主键，例如内置预设从 8 开始，容易误解为菜单、用户、预设共用同一个编号系统。
+- 根本原因：SQLite 五张业务表主键本身独立，存储层没有全局 ID 生成器；问题发生在 TUI 展示层，预设列表和可编辑/可删除列表直接把 `preset.id` 当成用户选择编号展示和输入。
+- 数据库 ID 与展示序号区别：数据库 ID 是持久化主键，允许因历史插入/删除产生空缺且不重排；展示序号是当前列表局部编号，每次显示独立从 1 开始。
+- 修改文件：`src/ui/tui/app.py`、`docs/ai_usage_log.md`。
+- 是否涉及数据库结构：不涉及；`users`、`sessions`、`messages`、`presets`、`user_configs` 均保持独立 `id INTEGER PRIMARY KEY AUTOINCREMENT`。
+- 临时数据库验证结果：使用 `data/sqlite/_id_test.db` 创建空库，五张表第一条 ID 均为 1，第二条 ID 均为 2；多个用户不会推动 `preset.id`，多个预设不会推动 `user.id`；验证后已删除临时数据库。
+- TUI 编号修复结果：用户列表、预设列表、自定义预设编辑/删除列表使用“序号”作为用户可见编号；编辑/删除时输入列表序号，并通过局部映射转换到真实数据库 ID。
+- 回归验证结果：`uv run python -m compileall src scripts`、`uv run python scripts/init_db.py`、`uv run python src/main.py`、`uv run ruff check src scripts tests`、`uv run pytest` 均通过；`git diff --check` 待最终检查。
+- 用户需要手工验证的内容：在 TUI 中创建或切换用户后进入预设管理，确认预设列表序号从 1 开始；确认自定义预设编辑/删除输入的是列表序号，且数据库 ID 不连续时仍能定位正确对象。
+
+## Step 5 补充：隐藏数据库主键展示
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 数据库主键与展示序号的区别：数据库主键是内部持久化标识，用于外键、查询、权限校验和更新删除；展示序号是当前 TUI 列表局部生成的临时编号，每个列表都从 1 开始。
+- 为什么隐藏数据库 ID：普通用户只需要识别“第几个预设”和预设名称，数据库 ID 是实现细节；隐藏后可以减少对“编号共用”的误解，也避免把不连续主键误认为异常。
+- presets 单表设计保持不变：系统内置预设与用户自定义预设继续共同存放在 `presets` 表；内置预设使用 `user_id=None`、`is_builtin=True`，自定义预设使用当前用户 ID、`is_builtin=False`。
+- 修改文件：`src/ui/tui/app.py`、`docs/ai_usage_log.md`。
+- 验证结果：`uv run python -m compileall src` 通过；`uv run python src/main.py` 可启动并通过输入 `7` 退出；使用已有用户 `bob` 只读进入预设列表，确认表头不再包含“数据库 ID”列，当前用户状态只显示用户名；`git diff --check` 待最终检查。
+- 用户待手工验证项目：预设列表没有“数据库 ID”列；预设序号从 1 开始；编辑/删除输入展示序号且能定位正确对象；当前用户状态只显示用户名；内置预设仍不可编辑和删除；不同用户的私人预设仍隔离；重复启动后内置预设不重复。

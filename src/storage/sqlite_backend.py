@@ -299,12 +299,45 @@ class SQLiteBackend(StorageBackend):
         )
         return [self._row_to_message(row) for row in rows]
 
+    async def get_preset_by_id(self, preset_id: int) -> Preset | None:
+        """Return any preset by id."""
+        row = await self._fetchone("SELECT * FROM presets WHERE id = ?", (preset_id,))
+        return self._row_to_preset(row) if row else None
+
     async def save_preset(self, preset: Preset) -> Preset:
         """Create or update a preset."""
         connection = self._require_connection()
         now = self._datetime_to_iso(preset.updated_at)
 
-        if preset.id > 0 and await self.get_preset(preset.id):
+        if not preset.id:
+            cursor = await connection.execute(
+                """
+                INSERT INTO presets (
+                    user_id, name, description, system_prompt, is_builtin,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    preset.user_id,
+                    preset.name,
+                    preset.description,
+                    preset.system_prompt,
+                    self._bool_to_int(preset.is_builtin),
+                    self._datetime_to_iso(preset.created_at),
+                    now,
+                ),
+            )
+            await connection.commit()
+            saved = await self.get_preset_by_id(int(cursor.lastrowid))
+            if saved is None:
+                raise RuntimeError("创建预设后无法读取数据库记录。")
+            return saved
+
+        if await self.get_preset_by_id(preset.id) is None:
+            raise RuntimeError(f"要更新的预设不存在：id={preset.id}")
+
+        if preset.id > 0:
             await connection.execute(
                 """
                 UPDATE presets
@@ -327,39 +360,14 @@ class SQLiteBackend(StorageBackend):
                 ),
             )
             await connection.commit()
-            saved = await self.get_preset(preset.id)
+            saved = await self.get_preset_by_id(preset.id)
             if saved is None:
                 raise RuntimeError("保存预设后无法读取数据库记录。")
             return saved
 
-        cursor = await connection.execute(
-            """
-            INSERT INTO presets (
-                user_id, name, description, system_prompt, is_builtin,
-                created_at, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                preset.user_id,
-                preset.name,
-                preset.description,
-                preset.system_prompt,
-                self._bool_to_int(preset.is_builtin),
-                self._datetime_to_iso(preset.created_at),
-                now,
-            ),
-        )
-        await connection.commit()
-        saved = await self.get_preset(int(cursor.lastrowid))
-        if saved is None:
-            raise RuntimeError("创建预设后无法读取数据库记录。")
-        return saved
-
     async def get_preset(self, preset_id: int) -> Preset | None:
         """Return a preset by id."""
-        row = await self._fetchone("SELECT * FROM presets WHERE id = ?", (preset_id,))
-        return self._row_to_preset(row) if row else None
+        return await self.get_preset_by_id(preset_id)
 
     async def list_presets(self, user_id: int | None = None) -> list[Preset]:
         """List built-in presets and optional user presets."""

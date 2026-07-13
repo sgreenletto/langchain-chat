@@ -6,7 +6,7 @@
 D:\project\langchain-chat
 ```
 
-当前已推进到 Step 4，完成用户管理业务层、TUI 用户菜单与 SQLite 存储后端接入。
+当前已推进到 Step 5，完成预设管理业务层、TUI 预设菜单与内置预设幂等导入。
 
 ## 计划功能
 
@@ -52,6 +52,7 @@ langchain-chat/
     ├── core/
     │   ├── __init__.py
     │   ├── config_manager.py
+    │   ├── preset_manager.py
     │   └── user_manager.py
     ├── interface/
     │   ├── __init__.py
@@ -151,22 +152,22 @@ Step 15 计划采用：
 
 项目按教学步骤逐步推进。每个 Step 应只实现当前阶段要求的能力，先验证本步骤，再进入下一步。
 
-Step 4 的重点是：
+Step 5 的重点是：
 
-- 使用 UserManager 封装用户管理业务规则。
-- 将 TUI 用户管理菜单接入 UserManager。
-- 通过 StorageBackend 与 SQLiteBackend 持久化用户数据。
-- 在 TUIApp 中维护进程内当前用户状态。
+- 从 `config/presets.yaml` 幂等导入系统内置预设。
+- 使用 PresetManager 封装预设权限和用户隔离规则。
+- 将 TUI 预设菜单接入 PresetManager。
+- 支持当前用户自定义预设的创建、查看、编辑和删除。
 
 ## 当前 Step 状态
 
 当前处于：
 
 ```text
-Step 4：用户管理模块与 TUI 用户菜单
+Step 5：预设管理模块与 TUI 预设菜单
 ```
 
-已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端和用户管理菜单。尚未实现预设管理、会话管理、多轮对话、模型切换或 LangChain 调用。
+已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端、用户管理菜单和预设管理菜单。尚未实现会话管理、多轮对话、模型切换或 LangChain 调用。
 
 ## 后续开发说明
 
