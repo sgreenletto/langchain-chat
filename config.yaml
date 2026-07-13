@@ -21,7 +21,7 @@ llm:
   max_retries: 3
 
 storage:
-  default: sqlite
+  type: sqlite
   sqlite:
     database_path: data/langchain_chat.sqlite
   mysql:
@@ -38,5 +38,5 @@ conversation:
   title_max_length: 50
 
 export:
-  directory: data/users/{username}/exports
+  dir: data/users/{username}/exports
   filename_template: "{conversation_id}_{timestamp}.{format}"
