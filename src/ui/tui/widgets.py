@@ -2,7 +2,6 @@
 
 import asyncio
 import platform
-from typing import Optional
 
 from prompt_toolkit import PromptSession
 from rich.console import Console
@@ -10,7 +9,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
-prompt_session: Optional[PromptSession[str]] = None
+prompt_session: PromptSession[str] | None = None
 
 
 def show_banner() -> None:

@@ -1,7 +1,6 @@
 """Abstract storage backend interface for future persistence implementations."""
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from models.schemas import Message, Preset, Session, User, UserConfig
 
@@ -22,11 +21,11 @@ class StorageBackend(ABC):
         """Create or update a user."""
 
     @abstractmethod
-    async def get_user_by_id(self, user_id: int) -> Optional[User]:
+    async def get_user_by_id(self, user_id: int) -> User | None:
         """Return a user by id."""
 
     @abstractmethod
-    async def get_user_by_username(self, username: str) -> Optional[User]:
+    async def get_user_by_username(self, username: str) -> User | None:
         """Return a user by username."""
 
     @abstractmethod
@@ -42,7 +41,7 @@ class StorageBackend(ABC):
         """Create or update a session."""
 
     @abstractmethod
-    async def get_session(self, session_id: int) -> Optional[Session]:
+    async def get_session(self, session_id: int) -> Session | None:
         """Return a session by id."""
 
     @abstractmethod
@@ -75,11 +74,11 @@ class StorageBackend(ABC):
         """Create or update a preset."""
 
     @abstractmethod
-    async def get_preset(self, preset_id: int) -> Optional[Preset]:
+    async def get_preset(self, preset_id: int) -> Preset | None:
         """Return a preset by id."""
 
     @abstractmethod
-    async def list_presets(self, user_id: Optional[int] = None) -> list[Preset]:
+    async def list_presets(self, user_id: int | None = None) -> list[Preset]:
         """List built-in and user presets."""
 
     @abstractmethod
@@ -91,7 +90,7 @@ class StorageBackend(ABC):
         """Create or update one user config item."""
 
     @abstractmethod
-    async def get_user_config(self, user_id: int, key: str) -> Optional[UserConfig]:
+    async def get_user_config(self, user_id: int, key: str) -> UserConfig | None:
         """Return one user config item."""
 
     @abstractmethod

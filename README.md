@@ -7,6 +7,7 @@ D:\project\langchain-chat
 ```
 
 当前已推进到 Step 2，完成数据模型、存储接口、配置管理和可交互 TUI 骨架。
+Step 3 已加入 SQLite 存储后端、存储工厂和数据库初始化脚本。
 
 ## 计划功能
 
@@ -26,6 +27,7 @@ D:\project\langchain-chat
 - python-dotenv
 - Rich
 - prompt_toolkit
+- aiosqlite
 - LangChain（后续步骤引入）
 - SQLite / MySQL / 文件存储（后续步骤实现）
 - Ruff、pytest（保留基础配置，后续步骤使用）
@@ -59,7 +61,9 @@ langchain-chat/
     │   └── schemas.py
     ├── storage/
     │   ├── __init__.py
-    │   └── base.py
+    │   ├── base.py
+    │   ├── factory.py
+    │   └── sqlite_backend.py
     └── ui/
         ├── __init__.py
         └── tui/
@@ -68,6 +72,12 @@ langchain-chat/
             ├── chat_view.py
             ├── menu_view.py
             └── widgets.py
+├── scripts/
+│   ├── __init__.py
+│   └── init_db.py
+└── tests/
+    ├── __init__.py
+    └── test_sqlite_backend.py
 ```
 
 ## 环境要求
@@ -110,6 +120,12 @@ uv run python src/main.py
 uv run python -m src.main
 ```
 
+初始化 SQLite 数据库并运行冒烟测试：
+
+```powershell
+uv run python scripts/init_db.py
+```
+
 ## .env.example 使用说明
 
 `.env.example` 只保存变量模板和占位值，不保存真实 API Key、数据库密码或令牌。
@@ -135,22 +151,22 @@ Step 15 计划采用：
 
 项目按教学步骤逐步推进。每个 Step 应只实现当前阶段要求的能力，先验证本步骤，再进入下一步。
 
-Step 2 的重点是：
+Step 3 的重点是：
 
-- 使用 Pydantic v2 定义五类核心数据模型。
-- 使用 ABC 定义异步存储后端接口。
-- 实现 `.env` 与 `config.yaml` 的配置读取和校验。
-- 建立 Rich + prompt_toolkit 的 TUI 主菜单骨架。
+- 使用 aiosqlite 实现 SQLiteBackend。
+- 使用 StorageFactory 创建存储后端。
+- 初始化 `users`、`sessions`、`messages`、`presets`、`user_configs` 五张表。
+- 通过脚本和测试验证 CRUD、搜索与级联删除。
 
 ## 当前 Step 状态
 
 当前处于：
 
 ```text
-Step 2：数据模型与 TUI 骨架
+Step 3：SQLite 存储后端与数据库初始化
 ```
 
-已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理和 TUI 主菜单骨架。尚未实现数据库、用户管理、会话管理、预设 CRUD、多轮对话、模型切换或 LangChain 调用。
+已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架和 SQLite 存储后端。尚未将存储层接入 TUI，也尚未实现用户管理、会话管理、预设 CRUD、多轮对话、模型切换或 LangChain 调用。
 
 ## 后续开发说明
 

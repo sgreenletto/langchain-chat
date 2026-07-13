@@ -8,8 +8,8 @@ SRC_DIR = Path(__file__).resolve().parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from core.config_manager import ConfigError, get_config
-from ui.tui.app import TUIApp
+from core.config_manager import ConfigError, get_config  # noqa: E402
+from ui.tui.app import TUIApp  # noqa: E402
 
 
 async def async_main() -> None:

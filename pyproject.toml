@@ -5,6 +5,7 @@ description = "基于 LangChain 的多轮会话系统（教学项目）"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
+    "aiosqlite>=0.22.1",
     "prompt-toolkit>=3.0.52",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
@@ -29,3 +30,9 @@ ignore = []
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.15.21",
+]

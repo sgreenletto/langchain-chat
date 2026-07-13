@@ -23,7 +23,7 @@ llm:
 storage:
   type: sqlite
   sqlite:
-    database_path: data/langchain_chat.sqlite
+    database_path: data/sqlite/app.db
   mysql:
     host_env: MYSQL_HOST
     port_env: MYSQL_PORT

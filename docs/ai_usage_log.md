@@ -32,3 +32,20 @@
 - 当前风险：仓库内缺少 Step 2 指定教学文档，本次实现依据用户本轮明确要求完成。
 - 建议 commit：`feat: step 2 - 数据模型、存储接口、配置管理与 TUI 骨架`
 - 建议 tag：`step-2-skeleton`
+
+## Step 3：SQLite 存储后端与数据库初始化
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 目标：实现 SQLiteBackend、StorageFactory、`scripts/init_db.py`，创建五张业务表，并完成异步存储层冒烟测试。
+- aiosqlite：通过 `uv add aiosqlite` 安装，用于正式 SQLite 后端；未使用同步 `sqlite3` 或 SQLAlchemy。
+- StorageFactory：`sqlite` 返回 `SQLiteBackend`，`mysql` 提示 Step 11 实现，`file` 提示 Step 12 实现，未知类型抛出 `ValueError`。
+- 五张表：`users`、`sessions`、`messages`、`presets`、`user_configs`。
+- 外键和级联：用户删除级联会话、消息、自定义预设和用户配置；会话删除级联消息；预设删除时会话引用置空。
+- 所有实现方法：SQLiteBackend 覆盖当前 `StorageBackend` 的 21 个抽象方法，并额外提供 `list_table_names()` 供初始化脚本验证。
+- init_db 冒烟过程：创建并查询用户，创建预设和会话，保存 human/ai 消息，读取消息列表和搜索结果，保存并读取用户配置，删除用户并验证关联数据级联删除。
+- 两次运行结果：两次执行 `uv run python scripts/init_db.py` 均成功；实际数据库路径为 `D:\project\langchain-chat\data\sqlite\app.db`；五张业务表为 `messages`、`presets`、`sessions`、`user_configs`、`users`；两次均完成用户、预设、会话、消息、用户配置的冒烟流程，并验证删除用户后关联会话、消息、预设和配置已级联清理。
+- 额外验证：`SQLiteBackend.__abstractmethods__` 为 `frozenset()`；`uv run ruff check src scripts tests` 通过；`uv run pytest` 通过，2 个测试全部通过；`uv run python src/main.py` 可启动 Step 2 TUI 并通过输入 `7` 退出。
+- 未完成项目：本步骤不接入 TUI，不实现 UserManager、PresetManager、SessionManager、ChatEngine、MySQLBackend 或 FileBackend。
+- 建议 commit：`feat: step 3 - SQLite 存储后端、工厂模式与数据库初始化`
+- 建议 tag：`step-3-sqlite`
