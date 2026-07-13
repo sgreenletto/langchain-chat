@@ -1,37 +1,28 @@
-"""Step 1 startup entry for langchain-chat."""
+"""Application entry point for langchain-chat Step 2."""
 
-import platform
+import asyncio
 import sys
-from datetime import datetime
+from pathlib import Path
 
-APP_NAME = "langchain-chat"
-APP_VERSION = "0.1.0"
-CURRENT_STEP = "Step 1：项目初始化与工程化配置"
+SRC_DIR = Path(__file__).resolve().parent
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-
-def print_banner() -> None:
-    """Print the Step 1 startup banner."""
-    python_version = platform.python_version()
-    runtime_platform = platform.platform()
-    started_at = datetime.now().astimezone().isoformat(timespec="seconds")
-
-    banner_lines = [
-        "=" * 60,
-        f"应用名称: {APP_NAME}",
-        f"应用版本: {APP_VERSION}",
-        f"Python 版本: {python_version}",
-        f"运行平台: {runtime_platform}",
-        f"启动时间: {started_at}",
-        f"当前 Step: {CURRENT_STEP}",
-        "=" * 60,
-    ]
-    print("\n".join(banner_lines))
+from core.config_manager import ConfigError, get_config
+from ui.tui.app import TUIApp
 
 
-def main() -> None:
-    """Run the application entry point for Step 1."""
-    print_banner()
+async def async_main() -> None:
+    """Load configuration and start the TUI."""
+    try:
+        config = get_config()
+    except ConfigError as exc:
+        print(f"配置错误：{exc}")
+        raise SystemExit(1) from exc
+
+    app = TUIApp(config)
+    await app.run()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(async_main())

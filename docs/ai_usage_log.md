@@ -16,3 +16,19 @@
 - 当前已知风险：仓库内缺少用户要求检查的 6 份原始教学文档，本次只能依据用户本轮提供的 Step 1 要求实现。
 - 计划使用的 commit：`chore: step 1 - 项目初始化与工程化配置`
 - 计划使用的 tag：`step-1-init`
+
+## Step 2：数据模型与 TUI 骨架
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 任务目标：使用 Pydantic v2 定义数据模型，使用 ABC 定义异步存储后端接口，实现 `.env` + `config.yaml` 配置加载，并建立可交互的 TUI 主菜单骨架。
+- 读取的教学文档：仓库内 `docs/需求说明文档.md`、`docs/实施步骤计划.md`、`docs/Step2-数据模型与TUI骨架教学文档.md` 均不存在，因此未能读取老师原始 Step 2 文档。
+- 用户提出的约束：只在 `D:\project\langchain-chat` 工作；必须保留 `main` 分支和 remote；依赖只能添加 Pydantic、pydantic-settings、python-dotenv、PyYAML、Rich、prompt_toolkit；不得实现 SQLiteBackend、数据库、用户管理、预设管理、LangChain 或真实 API 调用；不得提交 `.env`；不得执行 `git push`。
+- 新增和修改文件：新增 `src/core/config_manager.py`、`src/models/schemas.py`、`src/storage/base.py`、`src/interface/ui_protocol.py`、`src/ui/tui/app.py`、`src/ui/tui/menu_view.py`、`src/ui/tui/chat_view.py`、`src/ui/tui/widgets.py` 及各层 `__init__.py`；修改 `src/main.py`、`config.yaml`、`README.md`、`pyproject.toml`、`uv.lock`、`docs/ai_usage_log.md`。
+- 关键设计决策：源码内部采用相对于 `src` 的导入方式；`src/main.py` 注入 `src` 路径保证 `uv run python src/main.py` 稳定运行；模型只负责结构和校验；存储层只定义抽象契约；TUI 菜单只提供可进入的桩函数。
+- 实际执行命令：`uv add pydantic pydantic-settings python-dotenv pyyaml rich prompt_toolkit`、`uv sync`、`uv run python -c "import pydantic,pydantic_settings,dotenv,yaml,rich,prompt_toolkit; print('全部导入成功')"`、`uv run python -c "import sys; sys.path.insert(0,'src'); from models.schemas import User,Session,Message,Preset,UserConfig; u=User(id=1,username='test'); m=Message(id=1,session_id=1,role='human',content='hello'); print('User OK:',u.username); print('Message OK:',m.role)"`、`uv run python -c "import sys; sys.path.insert(0,'src'); from storage.base import StorageBackend; print('StorageBackend OK:',StorageBackend.__name__)"`、`uv run python -c "import sys; sys.path.insert(0,'src'); from core.config_manager import get_config; c=get_config(); print('Config OK')"`、`uv run python -c "import sys; sys.path.insert(0,'src'); from ui.tui.app import TUIApp; print('TUIApp OK:',TUIApp.__name__)"`、`uv run python -m compileall src`、`git diff --check`、`git status --short`、`git diff --stat`、`uv run python src/main.py`。
+- 实际结果：依赖安装和 `uv sync` 成功；依赖导入成功；Pydantic 模型实例化成功；`StorageBackend` 导入成功；`get_config()` 读取并校验配置成功；`TUIApp` 导入成功；`compileall` 成功；`git diff --check` 退出状态为 0，仅出现 Windows 换行提示；通过向 `uv run python src/main.py` 输入 `7` 验证 TUI 主菜单可启动并退出。未对所有菜单做人工交互验证。
+- 需要用户手工验证的内容：启动 `uv run python src/main.py` 后，人工操作各 TUI 菜单是否符合课堂预期。
+- 当前风险：仓库内缺少 Step 2 指定教学文档，本次实现依据用户本轮明确要求完成。
+- 建议 commit：`feat: step 2 - 数据模型、存储接口、配置管理与 TUI 骨架`
+- 建议 tag：`step-2-skeleton`
