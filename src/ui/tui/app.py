@@ -40,9 +40,9 @@ class TUIApp(AbstractUI):
         chat_engine: ChatEngine | None = None,
     ) -> None:
         self.config = config
-        self.user_manager = user_manager or UserManager(backend)
+        self.user_manager = user_manager or UserManager(backend, config)
         self.preset_manager = preset_manager or PresetManager(backend)
-        self.session_manager = session_manager or SessionManager(backend)
+        self.session_manager = session_manager or SessionManager(backend, config=config)
         self.chat_engine = chat_engine or ChatEngine(config)
         self.current_user: User | None = None
         self.current_session = None
@@ -76,6 +76,11 @@ class TUIApp(AbstractUI):
             "加载会话",
             "重命名会话",
             "删除会话",
+            "导出会话 Markdown",
+            "返回主菜单",
+        ]
+        self.settings_menu_options = [
+            "设置当前用户默认模型",
             "返回主菜单",
         ]
 
@@ -125,7 +130,7 @@ class TUIApp(AbstractUI):
             case "5":
                 await self._search_messages()
             case "6":
-                await menu_view.show_settings()
+                await self._show_settings_menu()
             case "7":
                 await menu_view.show_about()
             case "8":
@@ -173,7 +178,7 @@ class TUIApp(AbstractUI):
         try:
             user = await self.user_manager.create_user(
                 username,
-                default_model=self.config.model_name,
+                default_model=self.config.default_model_alias,
             )
         except ValueError as exc:
             await self.display_error(str(exc))
@@ -494,7 +499,8 @@ class TUIApp(AbstractUI):
         }
 
     async def _show_session_menu(self) -> None:
-        if not self._require_login():
+        if self.current_user is None:
+            show_warning("请先在用户管理中创建或切换用户")
             return
 
         while True:
@@ -515,9 +521,11 @@ class TUIApp(AbstractUI):
                 case "5":
                     await self._delete_session()
                 case "6":
+                    await self._export_session()
+                case "7":
                     return
                 case _:
-                    await self.display_error("无效菜单编号，请输入 1-6。")
+                    await self.display_error("无效菜单编号，请输入 1-7。")
 
     async def _list_sessions(self) -> list[Session]:
         if self.current_user is None:
@@ -562,7 +570,8 @@ class TUIApp(AbstractUI):
         if session is None:
             return
         self.current_session = session
-        show_success(f"已加载会话：{session.title}")
+        console.print(f"已加载会话: {session.title}", markup=False)
+        console.print("选择开始对话可继续此会话")
 
     async def _show_session_messages(self) -> None:
         if self.current_user is None:
@@ -644,6 +653,26 @@ class TUIApp(AbstractUI):
             self.current_session = None
             show_info("已清空当前会话状态。")
         show_success(f"会话“{deleted.title}”已删除。")
+
+    async def _export_session(self) -> None:
+        if self.current_user is None:
+            show_warning("请先创建或切换用户。")
+            return
+
+        session = await self._read_session_selection("请输入要导出的会话序号：")
+        if session is None:
+            return
+
+        try:
+            export_path = await self.session_manager.export_session_markdown(
+                self.current_user,
+                session.id,
+            )
+        except ValueError as exc:
+            await self.display_error(str(exc))
+            return
+
+        console.print(f"会话已导出: {export_path}", markup=False)
 
     async def _read_session_selection(self, prompt: str) -> Session | None:
         if self.current_user is None:
@@ -734,3 +763,73 @@ class TUIApp(AbstractUI):
             "system": "系统",
         }
         return role_names.get(role, role)
+
+    async def _show_settings_menu(self) -> None:
+        if self.current_user is None:
+            show_warning("请先创建或切换用户。")
+            return
+
+        while True:
+            show_separator()
+            self._show_current_user()
+            await self.display_menu("设置", self.settings_menu_options)
+            choice = await read_choice()
+            match choice:
+                case "1":
+                    await self._set_current_user_default_model()
+                case "2":
+                    return
+                case _:
+                    await self.display_error("无效菜单编号，请输入 1-2。")
+
+    async def _set_current_user_default_model(self) -> None:
+        if self.current_user is None:
+            show_warning("请先创建或切换用户。")
+            return
+
+        models = self.config.get_model_registry()
+        self._show_model_table()
+        raw_value = await self.get_user_input("请输入要设为默认模型的序号：")
+        try:
+            display_index = int(raw_value)
+        except ValueError:
+            await self.display_error("请输入有效的模型序号。")
+            return
+        if display_index < 1 or display_index > len(models):
+            await self.display_error(f"模型序号无效，请输入 1-{len(models)}。")
+            return
+
+        model_alias = models[display_index - 1].alias
+        try:
+            updated_user = await self.user_manager.update_default_model(
+                self.current_user.id,
+                model_alias,
+            )
+        except ValueError as exc:
+            await self.display_error(str(exc))
+            return
+
+        self.current_user = updated_user
+        show_success(f"当前用户默认模型已更新为：{model_alias}")
+        show_info("该设置只影响后续新建会话，已有会话不会自动变化。")
+
+    def _show_model_table(self) -> None:
+        table = Table(title="模型列表", show_header=True, header_style="bold cyan")
+        table.add_column("序号", justify="right")
+        table.add_column("别名")
+        table.add_column("显示名称")
+        table.add_column("实际模型")
+        table.add_column("状态")
+        for display_index, item in enumerate(self.config.get_model_registry(), start=1):
+            runtime_config = self.config.get_model_config(item.alias)
+            status = "可用"
+            if not runtime_config.available:
+                status = "不可用：缺少 " + "、".join(runtime_config.missing_env_vars)
+            table.add_row(
+                str(display_index),
+                item.alias,
+                item.display_name,
+                runtime_config.model,
+                status,
+            )
+        console.print(table)

@@ -5,15 +5,25 @@
 app:
   name: langchain-chat
   version: 0.1.0
-  current_step: "Step 9  对话搜索"
+  current_step: "Step 10  导出与模型切换"
 
 llm:
-  default_model: example-chat-model
+  default_model: default
   available_models:
-    - name: example-chat-model
+    - alias: default
+      display_name: 默认模型
+      model: example-chat-model
+      model_env: MODEL_NAME
+      api_base_url_env: API_BASE_URL
+      api_key_env: API_KEY
       provider: example
       description: 默认教学示例模型，占位用途。
-    - name: example-reasoning-model
+    - alias: reasoning
+      display_name: 推理模型
+      model: example-reasoning-model
+      model_env: REASONING_MODEL_NAME
+      api_base_url_env: REASONING_API_BASE_URL
+      api_key_env: REASONING_API_KEY
       provider: example
       description: 后续多模型切换示例，占位用途。
   temperature: 0.7

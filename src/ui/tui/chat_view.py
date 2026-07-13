@@ -94,7 +94,7 @@ async def _create_new_session(app: Any) -> Session | None:
     preset_id = preset.id if preset else None
     session = await app.session_manager.create_session(
         user_id=app.current_user.id,
-        model_name=app.config.model_name,
+        model_name=app.user_manager.get_effective_default_model(app.current_user),
         preset_id=preset_id,
     )
     show_success(
@@ -166,7 +166,11 @@ async def _chat_loop(app: Any, session: Session) -> None:
         response_parts: list[str] = []
         final_event: ChatStreamEvent | None = None
         try:
-            async for event in app.chat_engine.stream(messages):
+            model_alias = _resolve_session_model_alias(app, session)
+            async for event in app.chat_engine.stream(
+                messages,
+                model_alias=model_alias,
+            ):
                 if event.is_final:
                     final_event = event
                     continue
@@ -218,7 +222,10 @@ async def _handle_command(app: Any, session: Session, command: str) -> Session |
         show_info("已退出当前对话。")
         return None
     if command == "/help":
-        show_info("可用命令：/exit 返回主菜单；/new 新建会话；/rename 新标题；/help")
+        show_info(
+            "可用命令：/exit 返回主菜单；/new 新建会话；"
+            "/rename 新标题；/model [模型别名]；/help"
+        )
         return session
     if command == "/new":
         new_session = await _create_new_session(app)
@@ -239,9 +246,81 @@ async def _handle_command(app: Any, session: Session, command: str) -> Session |
             return session
         show_success(f"会话标题已更新：{updated.title}")
         return updated
+    if command == "/model" or command.startswith("/model "):
+        return await _handle_model_command(app, session, command)
 
     show_warning("未知命令，输入 /help 查看可用命令。")
     return session
+
+
+async def _handle_model_command(app: Any, session: Session, command: str) -> Session:
+    raw_alias = command.removeprefix("/model").strip()
+    if not raw_alias:
+        _show_models(app)
+        raw_value = await read_chat_input("请输入模型序号或别名：", CHAT_INPUT_HISTORY)
+        if raw_value is None:
+            return session
+        raw_alias = _model_alias_from_input(app, raw_value)
+        if not raw_alias:
+            return session
+
+    old_alias = _resolve_session_model_alias(app, session)
+    try:
+        updated = await app.session_manager.update_session_model(
+            app.current_user.id,
+            session.id,
+            raw_alias,
+        )
+    except ValueError as exc:
+        show_error(str(exc))
+        return session
+
+    show_success(f"会话模型已切换：{old_alias} -> {updated.model_name}")
+    show_info("历史上下文已保留，后续请求将使用新模型。")
+    return updated
+
+
+def _model_alias_from_input(app: Any, raw_value: str) -> str | None:
+    value = raw_value.strip()
+    models = app.config.get_model_registry()
+    try:
+        display_index = int(value)
+    except ValueError:
+        return value
+
+    if display_index < 1 or display_index > len(models):
+        show_error(f"模型序号无效，请输入 1-{len(models)}。")
+        return None
+    return models[display_index - 1].alias
+
+
+def _resolve_session_model_alias(app: Any, session: Session) -> str:
+    if session.model_name in app.config.get_model_aliases():
+        return session.model_name
+    show_warning("当前会话记录的模型已不在配置中，临时使用系统默认模型。")
+    return app.config.default_model_alias
+
+
+def _show_models(app: Any) -> None:
+    table = Table(title="可选模型", show_header=True, header_style="bold cyan")
+    table.add_column("序号", justify="right")
+    table.add_column("别名")
+    table.add_column("显示名称")
+    table.add_column("实际模型")
+    table.add_column("状态")
+    for display_index, item in enumerate(app.config.get_model_registry(), start=1):
+        runtime_config = app.config.get_model_config(item.alias)
+        status = "可用"
+        if not runtime_config.available:
+            status = "不可用：缺少 " + "、".join(runtime_config.missing_env_vars)
+        table.add_row(
+            str(display_index),
+            item.alias,
+            item.display_name,
+            runtime_config.model,
+            status,
+        )
+    console.print(table)
 
 
 def _show_sessions(title: str, sessions: list[Session]) -> None:

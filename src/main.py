@@ -30,9 +30,9 @@ async def async_main() -> None:
     try:
         backend = StorageFactory.create(config.storage.type)
         await backend.initialize()
-        user_manager = UserManager(backend)
+        user_manager = UserManager(backend, config)
         preset_manager = PresetManager(backend)
-        session_manager = SessionManager(backend)
+        session_manager = SessionManager(backend, config=config)
         chat_engine = ChatEngine(config)
         imported_count = await preset_manager.load_builtin_presets()
         if imported_count > 0:

@@ -1,16 +1,21 @@
-"""Session management business layer for Step 7."""
+"""Session management business layer."""
+
+import asyncio
+import re
+from datetime import datetime
+from pathlib import Path
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 try:
-    from ..models.schemas import Message, Preset, Session, utc_now
+    from ..models.schemas import Message, Preset, Session, User, utc_now
     from ..storage.base import StorageBackend
     from .chat_engine import ChatEngine
-    from .config_manager import get_config
+    from .config_manager import AppConfig, ConfigError, get_config
 except ImportError:
     from core.chat_engine import ChatEngine
-    from core.config_manager import get_config
-    from models.schemas import Message, Preset, Session, utc_now
+    from core.config_manager import AppConfig, ConfigError, get_config
+    from models.schemas import Message, Preset, Session, User, utc_now
     from storage.base import StorageBackend
 
 
@@ -21,10 +26,12 @@ class SessionManager:
         self,
         backend: StorageBackend,
         title_max_length: int | None = None,
+        config: AppConfig | None = None,
     ) -> None:
         self.backend = backend
+        self.config = config or get_config()
         self.title_max_length = (
-            title_max_length or get_config().conversation.title_max_length
+            title_max_length or self.config.conversation.title_max_length
         )
 
     async def create_session(
@@ -225,6 +232,51 @@ class SessionManager:
             raise ValueError("删除会话失败。")
         return session
 
+    async def update_session_model(
+        self,
+        user_id: int,
+        session_id: int,
+        model_alias: str,
+    ) -> Session:
+        """Switch a user-owned session to a configured available model."""
+        try:
+            runtime_config = self.config.validate_model_alias(
+                model_alias.strip(),
+                require_available=True,
+            )
+        except ConfigError as exc:
+            raise ValueError(str(exc)) from exc
+        session = await self._require_session_owner(user_id, session_id)
+        updated = Session(
+            id=session.id,
+            user_id=session.user_id,
+            title=session.title,
+            model_name=runtime_config.alias,
+            preset_id=session.preset_id,
+            total_prompt_tokens=session.total_prompt_tokens,
+            total_completion_tokens=session.total_completion_tokens,
+            created_at=session.created_at,
+            updated_at=utc_now(),
+        )
+        return await self.backend.save_session(updated)
+
+    async def export_session_markdown(
+        self,
+        user: User,
+        session_id: int,
+    ) -> Path:
+        """Export one user-owned session to a Markdown file."""
+        session = await self._require_session_owner(user.id, session_id)
+        messages = await self.backend.list_messages(session.id)
+        preset = await self.get_session_preset(session)
+        export_dir = self._build_export_dir(user.username)
+        filename = await self._build_unique_export_filename(export_dir, session.title)
+        markdown = self._build_markdown(user, session, preset, messages)
+
+        await asyncio.to_thread(export_dir.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(filename.write_text, markdown, "utf-8")
+        return filename
+
     async def _require_user(self, user_id: int) -> None:
         if await self.backend.get_user_by_id(user_id) is None:
             raise ValueError("用户不存在。")
@@ -267,3 +319,105 @@ class SessionManager:
         if len(normalized_title) > self.title_max_length:
             raise ValueError(f"会话标题不能超过 {self.title_max_length} 个字符。")
         return normalized_title
+
+    def _build_export_dir(self, username: str) -> Path:
+        safe_username = self._safe_filename(username, fallback="user")
+        relative_dir = self.config.export.dir.format(username=safe_username)
+        export_dir = (self.config.project_root / relative_dir).resolve()
+        data_root = (self.config.project_root / "data").resolve()
+        if not export_dir.is_relative_to(data_root):
+            raise ValueError("导出目录配置不安全，不能位于 data 目录之外。")
+        return export_dir
+
+    async def _build_unique_export_filename(
+        self,
+        export_dir: Path,
+        title: str,
+    ) -> Path:
+        safe_title = self._safe_filename(title, fallback="session")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = export_dir / f"{safe_title}_{timestamp}.md"
+        if not filename.exists():
+            return filename
+
+        counter = 2
+        while True:
+            candidate = export_dir / f"{safe_title}_{timestamp}_{counter}.md"
+            if not candidate.exists():
+                return candidate
+            counter += 1
+
+    def _build_markdown(
+        self,
+        user: User,
+        session: Session,
+        preset: Preset | None,
+        messages: list[Message],
+    ) -> str:
+        model_text = session.model_name or self.config.default_model_alias
+        preset_text = preset.name if preset else "无预设"
+        total_tokens = session.total_prompt_tokens + session.total_completion_tokens
+        lines = [
+            f"# {self._markdown_inline(session.title)}",
+            "",
+            f"- 用户：{self._markdown_inline(user.username)}",
+            f"- 模型：{self._markdown_inline(model_text)}",
+            f"- 预设：{self._markdown_inline(preset_text)}",
+            f"- 创建时间：{session.created_at.isoformat()}",
+            f"- 最后更新时间：{session.updated_at.isoformat()}",
+            f"- Prompt Tokens：{session.total_prompt_tokens}",
+            f"- Completion Tokens：{session.total_completion_tokens}",
+            f"- Total Tokens：{total_tokens}",
+            "",
+            "## 消息记录",
+            "",
+        ]
+        if not messages:
+            lines.append("该会话还没有任何消息。")
+            lines.append("")
+            return "\n".join(lines)
+
+        for index, message in enumerate(messages, start=1):
+            role_name = self._display_message_role(message.role)
+            lines.extend(
+                [
+                    f"### {index}. {role_name}",
+                    "",
+                    f"- 时间：{message.created_at.isoformat()}",
+                    f"- Prompt Tokens：{message.prompt_tokens}",
+                    f"- Completion Tokens：{message.completion_tokens}",
+                    "",
+                    self._markdown_code_block(message.content),
+                    "",
+                ]
+            )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _display_message_role(role: str) -> str:
+        return {
+            "system": "System",
+            "human": "Human",
+            "ai": "AI",
+        }.get(role, role)
+
+    @staticmethod
+    def _markdown_inline(value: str) -> str:
+        return value.replace("\n", " ").strip()
+
+    @staticmethod
+    def _markdown_code_block(content: str) -> str:
+        backtick_runs = [len(match.group(0)) for match in re.finditer(r"`+", content)]
+        fence_length = max([3, *(length + 1 for length in backtick_runs)])
+        fence = "`" * fence_length
+        return f"{fence}\n{content}\n{fence}"
+
+    @staticmethod
+    def _safe_filename(value: str, fallback: str) -> str:
+        normalized = value.strip().replace("\\", "_").replace("/", "_")
+        normalized = re.sub(r'[<>:"|?*\x00-\x1f]', "_", normalized)
+        normalized = re.sub(r"\s+", "_", normalized)
+        normalized = normalized.strip("._ ")
+        if not normalized or normalized in {".", ".."}:
+            normalized = fallback
+        return normalized[:80]

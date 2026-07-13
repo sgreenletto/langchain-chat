@@ -156,3 +156,15 @@
 - 旧数据影响：不会自动修改旧用户或旧会话中已经记录的历史模型名；修复只影响后续新建用户和新建会话。
 - 用户待手工验证项目：新用户和新会话模型名与 ChatEngine 一致；查看有消息和空会话；搜索中文、英文、不存在和空关键词；多个会话分组；用户隔离；Rich 输出无 markup 异常；Step 7/8 对话、加载、重命名和删除功能未回归。
 - commit 信息：`feat: step 9 - 对话搜索（E1）+ 查看会话记录 + 模型名 bug 修复`
+
+## Step 10：对话导出与模型切换
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 本次任务摘要：实现会话 Markdown 导出、当前用户默认模型设置、当前会话运行时模型切换，并在配置层补全模型注册表。
+- Codex 执行内容：检查 Step 9 标签和当前工作区；保留上一轮兼容的 TUI 提示优化；扩展 `config.yaml` 中的模型注册表；完善 ConfigManager、ChatEngine、SessionManager 和 UserManager；在 TUI 会话管理中加入导出入口，在设置菜单加入默认模型设置，在对话视图加入 `/model` 命令。
+- 修改文件：`.env.example`、`config.yaml`、`README.md`、`docs/ai_usage_log.md`、`src/core/config_manager.py`、`src/core/chat_engine.py`、`src/core/session_manager.py`、`src/core/user_manager.py`、`src/main.py`、`src/ui/tui/app.py`、`src/ui/tui/chat_view.py`、`src/ui/tui/menu_view.py`、`tests/test_session_manager.py`。
+- 关键设计决策：`User.default_model` 和 `Session.model_name` 存储模型别名；ChatEngine 继续无状态，调用时按模型别名解析运行配置；导出路径固定为 `data/users/{username}/exports/`；导出文件名使用安全化用户名、会话标题和日期时间；不修改数据库 schema，不改 `.env`，不提交运行时导出文件。
+- 验证命令及结果：`uv sync` 通过；`uv run ruff check .` 通过；`uv run pytest` 通过，8 个测试全部通过；`Get-ChildItem src\ui -Recurse -Filter *.py | Select-String "\.backend\."` 无输出；`uv run python -m src.main` 可启动并退出，横幅显示 Step 10。
+- 用户待手工验证项目：在 TUI 设置当前用户默认模型；新建会话使用新默认模型；对话中 `/model` 列表选择和直接别名切换；切换后继续多轮对话且历史上下文保留；会话管理导出 Markdown 并检查文件内容。
+- commit 信息：`feat: step 10 - 对话导出与运行时模型切换`

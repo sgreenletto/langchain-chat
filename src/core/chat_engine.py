@@ -9,7 +9,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from langchain_openai import ChatOpenAI
 
-from .config_manager import AppConfig, get_config
+from .config_manager import AppConfig, ModelRuntimeConfig, get_config
 
 logger = logging.getLogger(__name__)
 
@@ -74,37 +74,50 @@ class ChatEngine:
     full message history for every invocation.
     """
 
-    def __init__(self, config: AppConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig | None = None,
+        model_alias: str | None = None,
+    ) -> None:
         self.config = config or get_config()
-        self.model_name = self.config.model_name
+        self.model_alias = model_alias or self.config.default_model_alias
+        self._default_model_config = self.config.get_model_config(self.model_alias)
+        self.model_name = self._default_model_config.model
         self._closed = False
-        self._model = ChatOpenAI(
-            model=self.model_name,
-            api_key=self.config.api_key,
-            base_url=self.config.api_base_url,
-            temperature=self.config.temperature,
-            max_completion_tokens=self.config.max_tokens,
-            timeout=self.config.llm_timeout,
-            max_retries=self.config.llm_max_retries,
-            streaming=True,
-            stream_usage=True,
-        )
+        self._models: dict[str, ChatOpenAI] = {}
+        self._model = self._get_model(self.model_alias)
 
-    async def generate(self, messages: list[BaseMessage]) -> ChatEngineResult:
+    def for_model(self, model_alias: str) -> "ChatEngine":
+        """Return a stateless engine instance using one configured model alias."""
+        self.config.validate_model_alias(model_alias, require_available=True)
+        return ChatEngine(self.config, model_alias=model_alias)
+
+    async def generate(
+        self,
+        messages: list[BaseMessage],
+        model_alias: str | None = None,
+    ) -> ChatEngineResult:
         """Run a non-streaming chat completion with the full message history."""
         self._ensure_open()
         self._validate_messages(messages)
+        runtime_config = self._get_runtime_config(model_alias)
+        model = self._get_model(runtime_config.alias)
         logger.info(
             "Starting LLM call",
-            extra={"model": self.model_name, "call_type": "non_stream"},
+            extra={
+                "model_alias": runtime_config.alias,
+                "model": runtime_config.model,
+                "call_type": "non_stream",
+            },
         )
         try:
-            response = await self._model.ainvoke(messages)
+            response = await model.ainvoke(messages)
         except Exception as exc:
             logger.exception(
                 "LLM call failed",
                 extra={
-                    "model": self.model_name,
+                    "model_alias": runtime_config.alias,
+                    "model": runtime_config.model,
                     "call_type": "non_stream",
                     "error_type": type(exc).__name__,
                 },
@@ -120,17 +133,24 @@ class ChatEngine:
     async def stream(
         self,
         messages: list[BaseMessage],
+        model_alias: str | None = None,
     ) -> AsyncIterator[ChatStreamEvent]:
         """Stream a chat completion with the full message history."""
         self._ensure_open()
         self._validate_messages(messages)
+        runtime_config = self._get_runtime_config(model_alias)
+        model = self._get_model(runtime_config.alias)
         logger.info(
             "Starting LLM call",
-            extra={"model": self.model_name, "call_type": "stream"},
+            extra={
+                "model_alias": runtime_config.alias,
+                "model": runtime_config.model,
+                "call_type": "stream",
+            },
         )
         final_usage = TokenUsage()
         try:
-            async for chunk in self._model.astream(messages):
+            async for chunk in model.astream(messages):
                 usage = self._extract_usage(chunk)
                 if usage.provided:
                     final_usage = usage
@@ -141,7 +161,8 @@ class ChatEngine:
             logger.exception(
                 "Streaming LLM call failed",
                 extra={
-                    "model": self.model_name,
+                    "model_alias": runtime_config.alias,
+                    "model": runtime_config.model,
                     "call_type": "stream",
                     "error_type": type(exc).__name__,
                 },
@@ -155,14 +176,15 @@ class ChatEngine:
         if self._closed:
             return
 
-        for attr_name in ("root_async_client", "async_client"):
-            client = getattr(self._model, attr_name, None)
-            close = getattr(client, "close", None)
-            if close is None:
-                continue
-            result = close()
-            if inspect.isawaitable(result):
-                await result
+        for model in self._models.values():
+            for attr_name in ("root_async_client", "async_client"):
+                client = getattr(model, attr_name, None)
+                close = getattr(client, "close", None)
+                if close is None:
+                    continue
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
         self._closed = True
 
     def _ensure_open(self) -> None:
@@ -177,6 +199,29 @@ class ChatEngine:
             raise TypeError(
                 "messages 必须是 langchain_core.messages.BaseMessage 列表。"
             )
+
+    def _get_runtime_config(self, model_alias: str | None) -> ModelRuntimeConfig:
+        alias = model_alias or self.model_alias
+        return self.config.get_model_config(alias, require_available=True)
+
+    def _get_model(self, model_alias: str) -> ChatOpenAI:
+        runtime_config = self.config.get_model_config(model_alias)
+        model = self._models.get(runtime_config.alias)
+        if model is not None:
+            return model
+        model = ChatOpenAI(
+            model=runtime_config.model,
+            api_key=runtime_config.api_key,
+            base_url=runtime_config.api_base_url,
+            temperature=runtime_config.temperature,
+            max_completion_tokens=runtime_config.max_tokens,
+            timeout=runtime_config.timeout,
+            max_retries=runtime_config.max_retries,
+            streaming=True,
+            stream_usage=True,
+        )
+        self._models[runtime_config.alias] = model
+        return model
 
     @classmethod
     def _extract_usage(cls, message: AIMessage | AIMessageChunk | Any) -> TokenUsage:

@@ -6,7 +6,7 @@
 D:\project\langchain-chat
 ```
 
-当前已推进到 Step 9，完成对话搜索、查看会话记录和模型配置源修复。
+当前已推进到 Step 10，完成对话导出与运行时模型切换。
 
 ## 计划功能
 
@@ -153,6 +153,12 @@ uv run python -m examples.example3_langchain
 uv run python scripts/test_chat_engine.py
 ```
 
+Step 10 的会话导出文件会写入当前用户目录：
+
+```text
+data/users/{username}/exports/
+```
+
 ## .env.example 使用说明
 
 `.env.example` 只保存变量模板和占位值，不保存真实 API Key、数据库密码或令牌。
@@ -162,7 +168,7 @@ uv run python scripts/test_chat_engine.py
 ## 配置分层说明
 
 - `.env.example`：环境变量模板，只描述需要哪些敏感配置，不保存真实密钥。
-- `config.yaml`：业务配置，例如应用名称、模型参数、存储结构、导出路径等。
+- `config.yaml`：业务配置，例如应用名称、模型注册表、生成参数、存储结构、导出路径等。
 - `config/logging.yaml`：日志配置模板，后续可由 `logging.config.dictConfig()` 加载。
 - `config/presets.yaml`：系统内置提示词预设，Step 1 只保存配置，不实现读取和管理。
 
@@ -178,22 +184,23 @@ Step 15 计划采用：
 
 项目按教学步骤逐步推进。每个 Step 应只实现当前阶段要求的能力，先验证本步骤，再进入下一步。
 
-Step 9 的重点是：
+Step 10 的重点是：
 
-- 修复创建用户和创建会话时记录的模型名来源，统一使用 `config.model_name`。
-- 在会话管理中查看完整会话记录。
-- 在主菜单中按当前用户范围搜索历史消息。
-- 搜索结果按会话分组展示，并保持用户隔离。
+- 将指定会话完整导出为 Markdown。
+- 导出目录固定为 `data/users/{username}/exports/`。
+- 在设置菜单中更新当前用户的新会话默认模型。
+- 在对话中使用 `/model` 切换当前会话模型，并保留历史上下文。
+- 模型注册表由 `config.yaml` 定义，密钥仍只从本地 `.env` 环境变量读取。
 
 ## 当前 Step 状态
 
 当前处于：
 
 ```text
-Step 9  对话搜索
+Step 10  导出与模型切换
 ```
 
-已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端、用户管理菜单、预设管理菜单、无状态对话引擎、TUI 多轮流式对话视图、当前用户会话管理和历史消息搜索。导出和模型切换留到 Step 10。
+已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端、用户管理菜单、预设管理菜单、无状态对话引擎、TUI 多轮流式对话视图、当前用户会话管理、历史消息搜索、Markdown 导出和运行时模型切换。MySQL 后端留到 Step 11。
 
 ## 后续开发说明
 

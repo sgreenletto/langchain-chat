@@ -1,14 +1,29 @@
 """User management business layer."""
 
-from models.schemas import User
-from storage.base import StorageBackend
+import logging
+
+try:
+    from ..models.schemas import User, utc_now
+    from ..storage.base import StorageBackend
+    from .config_manager import AppConfig, ConfigError, get_config
+except ImportError:
+    from core.config_manager import AppConfig, ConfigError, get_config
+    from models.schemas import User, utc_now
+    from storage.base import StorageBackend
+
+logger = logging.getLogger(__name__)
 
 
 class UserManager:
     """Manage users through a StorageBackend dependency."""
 
-    def __init__(self, backend: StorageBackend) -> None:
+    def __init__(
+        self,
+        backend: StorageBackend,
+        config: AppConfig | None = None,
+    ) -> None:
         self.backend = backend
+        self.config = config or get_config()
 
     async def create_user(
         self,
@@ -60,3 +75,42 @@ class UserManager:
         if not deleted:
             raise ValueError(f"删除用户 '{normalized_username}' 失败。")
         return user
+
+    async def update_default_model(self, user_id: int, model_alias: str) -> User:
+        """Update one user's default model alias for future sessions."""
+        try:
+            runtime_config = self.config.validate_model_alias(
+                model_alias.strip(),
+                require_available=True,
+            )
+        except ConfigError as exc:
+            raise ValueError(str(exc)) from exc
+        user = await self.backend.get_user_by_id(user_id)
+        if user is None:
+            raise ValueError("用户不存在。")
+
+        updated = User(
+            id=user.id,
+            username=user.username,
+            default_model=runtime_config.alias,
+            default_preset_id=user.default_preset_id,
+            created_at=user.created_at,
+            updated_at=utc_now(),
+        )
+        return await self.backend.save_user(updated)
+
+    def get_effective_default_model(self, user: User) -> str:
+        """Return a valid configured model alias for a user's next session."""
+        if user.default_model:
+            try:
+                self.config.validate_model_alias(
+                    user.default_model,
+                    require_available=False,
+                )
+                return user.default_model
+            except ConfigError:
+                logger.warning(
+                    "User default model is invalid; falling back to system default",
+                    extra={"user_id": user.id, "model_alias": user.default_model},
+                )
+        return self.config.default_model_alias

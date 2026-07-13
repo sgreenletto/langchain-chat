@@ -16,11 +16,11 @@ async def show_preset_management() -> None:
 
 
 async def show_settings() -> None:
-    show_info("设置功能将在 Step 10 实现。")
+    show_info("设置功能已在主菜单中接入真实功能。")
 
 
 async def show_about() -> None:
     show_separator()
     show_info("langchain-chat：基于 LangChain 的多轮会话系统教学项目。")
-    show_warning("当前处于 Step 8：会话管理完善。")
+    show_warning("当前处于 Step 10：导出与模型切换。")
     show_separator()
