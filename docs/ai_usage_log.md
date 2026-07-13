@@ -49,3 +49,19 @@
 - 未完成项目：本步骤不接入 TUI，不实现 UserManager、PresetManager、SessionManager、ChatEngine、MySQLBackend 或 FileBackend。
 - 建议 commit：`feat: step 3 - SQLite 存储后端、工厂模式与数据库初始化`
 - 建议 tag：`step-3-sqlite`
+
+## Step 4：用户管理模块与 TUI 用户菜单
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 三层数据流：TUIApp 获取输入和显示结果，UserManager 处理用户业务规则，StorageBackend/SQLiteBackend 负责持久化到 SQLite。
+- UserManager 依赖注入：`UserManager` 构造函数接收 `StorageBackend`，不导入或创建 SQLiteBackend，不写 SQL。
+- 当前用户状态：`current_user` 和 `current_session` 维护在 TUIApp 实例内；切换用户时清空 `current_session`，重启后允许回到未登录状态。
+- 二次确认：删除用户的二次确认放在 UI 层，只有输入 `yes` 才调用业务层删除；禁止删除当前登录用户。
+- try/finally：`main.py` 启动时创建并初始化存储后端，TUI 退出、Ctrl+C 或异常时都在 `finally` 中关闭后端连接。
+- 实际验证命令：`uv run python scripts/init_db.py`、`uv run python -c "import sys; sys.path.insert(0,'src'); from core.user_manager import UserManager; print('UserManager OK:',UserManager.__name__)"`、`uv run python -c "import sys; sys.path.insert(0,'src'); from ui.tui.app import TUIApp; print('TUIApp OK:',TUIApp.__name__)"`、`uv run python -m compileall src`、`uv run python src/main.py`、`uv run ruff check src scripts tests`、`git diff --check`、`git status --short`、`git diff --stat`。
+- 实际结果：Step 3 初始化脚本通过；`UserManager` 和 `TUIApp` 均可导入；`compileall` 通过；应用可启动，横幅显示 Step 4，主菜单显示“当前用户：未登录”，通过输入 `7` 可退出；Ruff 检查通过。TUI 用户管理的完整交互流程留给用户手工验证。
+- 人工待验证流程：创建 `alice`；重复创建 `alice`；创建 `bob`；列出用户；切换 `bob`；删除当前 `bob` 被拒绝；删除 `alice` 并进行二次确认；重启后 `bob` 仍存在。
+- 未完成项目：本步骤不实现预设管理、会话管理、对话引擎或大模型调用。
+- 建议 commit：`feat: step 4 - 用户管理业务层、TUI 用户菜单与存储后端接入`
+- 建议 tag：`step-4-user-mgmt`

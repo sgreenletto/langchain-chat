@@ -6,8 +6,7 @@
 D:\project\langchain-chat
 ```
 
-当前已推进到 Step 2，完成数据模型、存储接口、配置管理和可交互 TUI 骨架。
-Step 3 已加入 SQLite 存储后端、存储工厂和数据库初始化脚本。
+当前已推进到 Step 4，完成用户管理业务层、TUI 用户菜单与 SQLite 存储后端接入。
 
 ## 计划功能
 
@@ -52,7 +51,8 @@ langchain-chat/
     ├── main.py
     ├── core/
     │   ├── __init__.py
-    │   └── config_manager.py
+    │   ├── config_manager.py
+    │   └── user_manager.py
     ├── interface/
     │   ├── __init__.py
     │   └── ui_protocol.py
@@ -151,22 +151,22 @@ Step 15 计划采用：
 
 项目按教学步骤逐步推进。每个 Step 应只实现当前阶段要求的能力，先验证本步骤，再进入下一步。
 
-Step 3 的重点是：
+Step 4 的重点是：
 
-- 使用 aiosqlite 实现 SQLiteBackend。
-- 使用 StorageFactory 创建存储后端。
-- 初始化 `users`、`sessions`、`messages`、`presets`、`user_configs` 五张表。
-- 通过脚本和测试验证 CRUD、搜索与级联删除。
+- 使用 UserManager 封装用户管理业务规则。
+- 将 TUI 用户管理菜单接入 UserManager。
+- 通过 StorageBackend 与 SQLiteBackend 持久化用户数据。
+- 在 TUIApp 中维护进程内当前用户状态。
 
 ## 当前 Step 状态
 
 当前处于：
 
 ```text
-Step 3：SQLite 存储后端与数据库初始化
+Step 4：用户管理模块与 TUI 用户菜单
 ```
 
-已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架和 SQLite 存储后端。尚未将存储层接入 TUI，也尚未实现用户管理、会话管理、预设 CRUD、多轮对话、模型切换或 LangChain 调用。
+已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端和用户管理菜单。尚未实现预设管理、会话管理、多轮对话、模型切换或 LangChain 调用。
 
 ## 后续开发说明
 
