@@ -221,3 +221,20 @@
 - 风险与 Step 13 后续建议：当前测试重点覆盖核心业务契约，尚未追求高覆盖率门槛；后续可继续补充日志 formatter、StorageFactory 配置错误和 TUI 交互的更细粒度测试，但应放在后续步骤或专项测试中。
 - 建议 commit：`test: step 13 - add core module test suite`
 - 建议 tag：`step-13-tests`
+
+## Step 14：README、架构文档与扩展预留
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- Step 14 目标：完善 README 和架构文档，让其他开发者能够安装、配置、运行、测试并理解项目；同时在 UI 接口层预留 WebUI、多模型并行对比、图文/文件、语音和 Tool Calling 的边界，但不实现这些后期功能。
+- 开始前状态：Git 根目录为 `D:/project/langchain-chat`，当前分支为 `main`，存在 `step-13-tests` 标签，开始时 `git status --short` 为空；前置 `uv sync` 提权后通过，`uv run pytest -q` 提权后结果为 `67 passed, 1 skipped`。
+- README 修改内容：将旧 Step 11 README 刷新为 Step 14 当前状态，覆盖项目定位、功能、技术栈、系统要求、目录结构、快速开始、环境变量、`config.yaml`、三种存储后端、TUI 流程、数据/导出/日志位置、测试和 Ruff 命令、MySQL 集成测试、安全说明、当前限制、后续扩展和 Git Step/tag。
+- architecture 内容：新增 `docs/architecture.md`，按真实代码描述分层架构、依赖方向、启动流程、一轮对话流程、实体关系、StorageBackend 与三种实现、StorageFactory 扩展方式、配置与敏感信息边界、JSONL 日志、错误处理、测试 Mock 边界、导出路径、TUI 与未来 WebUI 关系、技术债务和 Step 15 计划。
+- 扩展接口设计：在 `src/interface/ui_protocol.py` 中新增独立可选的数据结构和 Protocol，包括 `UITokenUsage`、`UIMessageContext`、`MultiModelCompareRequest`、`SingleModelCompareResult`、`UIAttachmentRef`、语音 STT/TTS 请求与结果、`ToolCallRequest`、`ToolCallUpdate`，以及多模型、附件、语音、工具调用和 WebUI 的 UI 能力协议。
+- 保持 TUI 向后兼容的方法：没有给 `AbstractUI` 增加新的抽象方法；当前 `TUIApp` 仍只需要实现原有基础方法，未来能力通过独立 Protocol 按需实现。
+- 明确未实现的后期功能：未实现 WebUI、多模型并行调用、图文上传或解析、语音识别/合成、Agent 或 Tool Calling 执行逻辑，也未新增任何 TUI 菜单入口。
+- 文档命令验证结果：README 中的 `uv sync`、`uv run python scripts/init_db.py`、`uv run python -m src.main`、`uv run pytest -q`、`uv run pytest --cov=src --cov-report=term-missing`、`uv run ruff check .`、`uv run ruff format --check .` 和 `uv run python -m compileall src` 均与当前入口或工具配置一致；README 未将 Step 15 写成已实现能力。
+- 实际测试结果：最终验证命令结果见本次最终报告；MySQL 集成测试默认仍为 skipped，需要 `RUN_MYSQL_TESTS=1` 和有效测试库人工验证。
+- 未完成事项：未执行真实 LLM 调用；未运行真实 MySQL 集成测试；未做交互式 TUI 人工全流程；未实现 Step 15 多环境加载。
+- 建议 commit：`docs: step 14 - add architecture and extension contracts`
+- 建议 tag：`step-14-docs-extend`

@@ -5,7 +5,7 @@
 app:
   name: langchain-chat
   version: 0.1.0
-  current_step: "Step 13 核心模块单元测试"
+  current_step: "Step 14 README、架构文档与扩展预留"
 
 llm:
   default_model: default
