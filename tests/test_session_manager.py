@@ -23,7 +23,7 @@ def run(coro):
 async def exercise_session_manager(db_path):
     backend = SQLiteBackend(db_path)
     await backend.initialize()
-    manager = SessionManager(backend)
+    manager = SessionManager(backend, title_max_length=10)
     try:
         alice = await backend.save_user(User(id=0, username="alice"))
         bob = await backend.save_user(User(id=0, username="bob"))
@@ -66,11 +66,26 @@ async def exercise_session_manager(db_path):
         )
         assert title == "这是一个很长的标题内容用于测试兜底逻辑"
 
-        updated = await manager.update_session_title(alice.id, session.id, "新标题")
+        updated = await manager.rename_session(alice.id, session.id, "新标题")
         assert updated.title == "新标题"
 
+        with pytest.raises(ValueError, match="不能为空"):
+            await manager.rename_session(alice.id, session.id, "   ")
+        with pytest.raises(ValueError, match="不能超过"):
+            await manager.rename_session(
+                alice.id,
+                session.id,
+                "这是一个超过长度限制的标题",
+            )
         with pytest.raises(ValueError, match="不属于当前用户"):
-            await manager.update_session_title(bob.id, session.id, "坏标题")
+            await manager.rename_session(bob.id, session.id, "坏标题")
+
+        deleted = await manager.delete_session(alice.id, session.id)
+        assert deleted.id == session.id
+        assert await backend.get_session(session.id) is None
+        assert await backend.list_messages(session.id) == []
+        with pytest.raises(ValueError, match="不属于当前用户"):
+            await manager.get_session(alice.id, session.id)
     finally:
         await backend.close()
 

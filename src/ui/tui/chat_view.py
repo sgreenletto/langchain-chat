@@ -40,7 +40,7 @@ async def start_chat(app: Any) -> None:
 
 
 async def _select_or_create_session(app: Any) -> Session | None:
-    sessions = await app.session_manager.list_user_sessions(app.current_user.id)
+    sessions = await app.session_manager.list_sessions(app.current_user.id)
     if not sessions:
         show_info("当前用户还没有会话。")
         show_menu("开始对话", ["新建会话", "返回主菜单"])
@@ -78,11 +78,12 @@ async def _choose_session(app: Any, sessions: list[Session]) -> Session | None:
         show_error(f"无效序号，请输入 1-{len(sessions[:10])}。")
         return None
     selected = sessions[display_index - 1]
-    session = await app.session_manager.get_user_session(
-        app.current_user.id,
-        selected.id,
-    )
-    if session is None:
+    try:
+        session = await app.session_manager.get_session(
+            app.current_user.id,
+            selected.id,
+        )
+    except ValueError:
         show_error("会话不存在或不属于当前用户。")
         return None
     return session
@@ -228,7 +229,7 @@ async def _handle_command(app: Any, session: Session, command: str) -> Session |
             show_warning("用法：/rename 新标题")
             return session
         try:
-            updated = await app.session_manager.update_session_title(
+            updated = await app.session_manager.rename_session(
                 app.current_user.id,
                 session.id,
                 title,

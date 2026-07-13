@@ -130,3 +130,15 @@
 - 验证命令及结果：`uv sync` 通过；`uv run ruff check .` 通过；`uv run pytest` 通过，8 个测试全部通过；`uv run python -c "from src.core.session_manager import SessionManager; print(SessionManager.__name__)"` 输出 `SessionManager`；`uv run python -m compileall src scripts tests` 通过；`uv run python -m src.main` 可启动并退出，横幅显示 Step 7；自动输入“开始对话”验证未登录保护通过。
 - 用户待手工验证项目：预设选择、无预设会话、流式回复、多轮记忆、Token 展示、`/help`、`/rename`、`/new`、`/exit`、上箭头输入历史、重启后加载历史继续、用户 A 与用户 B 数据隔离。
 - commit 信息：`feat: step 7 - 会话管理与 TUI 多轮流式对话`
+
+## Step 8：会话管理完善与分层重构
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 本次任务摘要：完善当前用户会话列表、加载、重命名和删除功能，删除前二次确认，删除当前会话后清空 TUI 状态，并修复 UI 直接访问存储后端的分层穿透风险。
+- Codex 执行内容：检查 Step 7 标签和干净工作区；扩展 `SessionManager` 的 `list_sessions`、`get_session`、`rename_session`、`delete_session`；在 TUIApp 中实现会话管理子菜单；更新 chat_view 调用新业务接口；更新 Step 8 配置、README 和测试。
+- 修改文件：`config.yaml`、`README.md`、`docs/ai_usage_log.md`、`src/core/session_manager.py`、`src/storage/sqlite_backend.py`、`src/ui/tui/app.py`、`src/ui/tui/chat_view.py`、`src/ui/tui/menu_view.py`、`tests/test_session_manager.py`。
+- 关键设计决策：会话归属校验放在 SessionManager；UI 只使用临时显示序号映射到 Session 对象；删除会话依赖存储层 `delete_session` 和数据库级联清理消息；不修改数据库 schema。
+- 验证命令及结果：`uv sync` 通过；`uv run ruff check .` 通过；`uv run pytest` 通过，8 个测试全部通过；`Get-ChildItem src\ui -Recurse -Filter *.py | Select-String "\.backend\."` 无输出；`uv run python -m compileall src tests` 通过；`uv run python -m src.main` 可启动并退出，横幅显示 Step 8；自动输入“会话管理”验证未登录保护通过。
+- 用户待手工验证项目：空会话列表、多个会话排序、加载历史继续对话、重命名、空标题拒绝、删除取消、删除确认、删除后消息不可加载、删除当前会话后状态清空、用户隔离、列表序号从 1 开始。
+- commit 信息：`feat: step 8 - 完善会话列表、加载、重命名与删除`

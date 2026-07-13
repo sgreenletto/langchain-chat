@@ -6,8 +6,10 @@ try:
     from ..models.schemas import Message, Preset, Session, utc_now
     from ..storage.base import StorageBackend
     from .chat_engine import ChatEngine
+    from .config_manager import get_config
 except ImportError:
     from core.chat_engine import ChatEngine
+    from core.config_manager import get_config
     from models.schemas import Message, Preset, Session, utc_now
     from storage.base import StorageBackend
 
@@ -15,8 +17,15 @@ except ImportError:
 class SessionManager:
     """Manage chat sessions and persisted messages."""
 
-    def __init__(self, backend: StorageBackend) -> None:
+    def __init__(
+        self,
+        backend: StorageBackend,
+        title_max_length: int | None = None,
+    ) -> None:
         self.backend = backend
+        self.title_max_length = (
+            title_max_length or get_config().conversation.title_max_length
+        )
 
     async def create_session(
         self,
@@ -39,17 +48,25 @@ class SessionManager:
             )
         )
 
-    async def list_user_sessions(self, user_id: int) -> list[Session]:
+    async def list_sessions(self, user_id: int) -> list[Session]:
         """List sessions owned by a user."""
         await self._require_user(user_id)
         return await self.backend.list_sessions(user_id)
 
+    async def list_user_sessions(self, user_id: int) -> list[Session]:
+        """Backward-compatible alias for listing user sessions."""
+        return await self.list_sessions(user_id)
+
+    async def get_session(self, user_id: int, session_id: int) -> Session:
+        """Return a session after validating ownership."""
+        return await self._require_session_owner(user_id, session_id)
+
     async def get_user_session(self, user_id: int, session_id: int) -> Session | None:
         """Return a session only when it belongs to the user."""
-        session = await self.backend.get_session(session_id)
-        if session is None or session.user_id != user_id:
+        try:
+            return await self.get_session(user_id, session_id)
+        except ValueError:
             return None
-        return session
 
     async def get_recent_session(self, user_id: int) -> Session | None:
         """Return the user's most recently updated session."""
@@ -159,9 +176,7 @@ class SessionManager:
         title: str,
     ) -> Session:
         """Update a session title after validating ownership."""
-        normalized_title = title.strip()
-        if not normalized_title:
-            raise ValueError("会话标题不能为空。")
+        normalized_title = self._validate_title(title)
         session = await self._require_session_owner(user_id, session_id)
         updated = Session(
             id=session.id,
@@ -176,13 +191,30 @@ class SessionManager:
         )
         return await self.backend.save_session(updated)
 
+    async def rename_session(
+        self,
+        user_id: int,
+        session_id: int,
+        title: str,
+    ) -> Session:
+        """Rename a session after validating ownership and title."""
+        return await self.update_session_title(user_id, session_id, title)
+
+    async def delete_session(self, user_id: int, session_id: int) -> Session:
+        """Delete a session after validating ownership."""
+        session = await self._require_session_owner(user_id, session_id)
+        deleted = await self.backend.delete_session(session.id)
+        if not deleted:
+            raise ValueError("删除会话失败。")
+        return session
+
     async def _require_user(self, user_id: int) -> None:
         if await self.backend.get_user_by_id(user_id) is None:
             raise ValueError("用户不存在。")
 
     async def _require_session_owner(self, user_id: int, session_id: int) -> Session:
-        session = await self.get_user_session(user_id, session_id)
-        if session is None:
+        session = await self.backend.get_session(session_id)
+        if session is None or session.user_id != user_id:
             raise ValueError("会话不存在或不属于当前用户。")
         return session
 
@@ -210,3 +242,11 @@ class SessionManager:
         if not normalized:
             return "新会话"
         return normalized[:30]
+
+    def _validate_title(self, title: str) -> str:
+        normalized_title = title.strip()
+        if not normalized_title:
+            raise ValueError("会话标题不能为空。")
+        if len(normalized_title) > self.title_max_length:
+            raise ValueError(f"会话标题不能超过 {self.title_max_length} 个字符。")
+        return normalized_title

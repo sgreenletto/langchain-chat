@@ -8,7 +8,7 @@ async def show_user_management() -> None:
 
 
 async def show_session_management() -> None:
-    show_info("会话管理将在 Step 7/8 实现。")
+    show_info("会话管理已在主菜单中接入真实功能。")
 
 
 async def show_preset_management() -> None:
@@ -22,5 +22,5 @@ async def show_settings() -> None:
 async def show_about() -> None:
     show_separator()
     show_info("langchain-chat：基于 LangChain 的多轮会话系统教学项目。")
-    show_warning("当前处于 Step 2，仅提供数据模型、存储接口、配置管理和 TUI 骨架。")
+    show_warning("当前处于 Step 8：会话管理完善。")
     show_separator()

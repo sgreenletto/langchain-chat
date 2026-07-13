@@ -6,9 +6,14 @@ from typing import Any
 
 import aiosqlite
 
-from core.config_manager import get_config
-from models.schemas import Message, Preset, Session, User, UserConfig
-from storage.base import StorageBackend
+try:
+    from ..core.config_manager import get_config
+    from ..models.schemas import Message, Preset, Session, User, UserConfig
+    from .base import StorageBackend
+except ImportError:
+    from core.config_manager import get_config
+    from models.schemas import Message, Preset, Session, User, UserConfig
+    from storage.base import StorageBackend
 
 
 class SQLiteBackend(StorageBackend):

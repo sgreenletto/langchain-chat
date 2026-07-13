@@ -8,7 +8,7 @@ from core.preset_manager import PresetManager
 from core.session_manager import SessionManager
 from core.user_manager import UserManager
 from interface.ui_protocol import AbstractUI
-from models.schemas import Preset, User
+from models.schemas import Preset, Session, User
 from storage.base import StorageBackend
 from ui.tui import menu_view
 from ui.tui.chat_view import start_chat
@@ -69,6 +69,13 @@ class TUIApp(AbstractUI):
             "删除自定义预设",
             "返回主菜单",
         ]
+        self.session_menu_options = [
+            "查看会话列表",
+            "加载会话",
+            "重命名会话",
+            "删除会话",
+            "返回主菜单",
+        ]
 
     async def display_message(self, message: str) -> None:
         show_info(message)
@@ -108,7 +115,7 @@ class TUIApp(AbstractUI):
             case "1":
                 await self._show_user_menu()
             case "2":
-                await menu_view.show_session_management()
+                await self._show_session_menu()
             case "3":
                 await self._show_preset_menu()
             case "4":
@@ -480,4 +487,165 @@ class TUIApp(AbstractUI):
         return {
             display_index: preset
             for display_index, preset in enumerate(presets, start=1)
+        }
+
+    async def _show_session_menu(self) -> None:
+        if not self._require_login():
+            return
+
+        while True:
+            show_separator()
+            self._show_current_user()
+            await self.display_menu("会话管理", self.session_menu_options)
+            choice = await read_choice()
+
+            match choice:
+                case "1":
+                    await self._list_sessions()
+                case "2":
+                    await self._load_session()
+                case "3":
+                    await self._rename_session()
+                case "4":
+                    await self._delete_session()
+                case "5":
+                    return
+                case _:
+                    await self.display_error("无效菜单编号，请输入 1-5。")
+
+    async def _list_sessions(self) -> list[Session]:
+        if self.current_user is None:
+            show_warning("请先创建或切换用户。")
+            return []
+
+        sessions = await self.session_manager.list_sessions(self.current_user.id)
+        if not sessions:
+            show_info("当前用户还没有任何会话。")
+            return []
+
+        table = Table(title="会话列表", show_header=True, header_style="bold cyan")
+        table.add_column("序号", justify="right")
+        table.add_column("标题")
+        table.add_column("模型")
+        table.add_column("预设")
+        table.add_column("创建时间")
+        table.add_column("最后更新")
+        table.add_column("累计 Token", justify="right")
+        current_session_id = self.current_session.id if self.current_session else None
+
+        for display_index, session in enumerate(sessions, start=1):
+            preset = await self.session_manager.get_session_preset(session)
+            title = session.title
+            if session.id == current_session_id:
+                title = f"{title}（当前）"
+            table.add_row(
+                str(display_index),
+                title,
+                session.model_name or "-",
+                preset.name if preset else "无预设",
+                session.created_at.astimezone().strftime("%Y-%m-%d %H:%M"),
+                session.updated_at.astimezone().strftime("%Y-%m-%d %H:%M"),
+                str(session.total_prompt_tokens + session.total_completion_tokens),
+            )
+
+        console.print(table)
+        return sessions
+
+    async def _load_session(self) -> None:
+        session = await self._read_session_selection("请输入要加载的会话序号：")
+        if session is None:
+            return
+        self.current_session = session
+        show_success(f"已加载会话：{session.title}")
+
+    async def _rename_session(self) -> None:
+        if self.current_user is None:
+            show_warning("请先创建或切换用户。")
+            return
+
+        session = await self._read_session_selection("请输入要重命名的会话序号：")
+        if session is None:
+            return
+
+        new_title = await self.get_user_input("请输入新标题：")
+        try:
+            renamed = await self.session_manager.rename_session(
+                self.current_user.id,
+                session.id,
+                new_title,
+            )
+        except ValueError as exc:
+            await self.display_error(str(exc))
+            return
+
+        if self.current_session is not None and self.current_session.id == renamed.id:
+            self.current_session = renamed
+        show_success(f"会话已重命名：{renamed.title}")
+        await self._list_sessions()
+
+    async def _delete_session(self) -> None:
+        if self.current_user is None:
+            show_warning("请先创建或切换用户。")
+            return
+
+        session = await self._read_session_selection("请输入要删除的会话序号：")
+        if session is None:
+            return
+
+        confirm = await self.get_user_input(
+            f"确认删除会话 '{session.title}'？输入 yes 确认："
+        )
+        if confirm != "yes":
+            show_info("已取消删除会话。")
+            return
+
+        try:
+            deleted = await self.session_manager.delete_session(
+                self.current_user.id,
+                session.id,
+            )
+        except ValueError as exc:
+            await self.display_error(str(exc))
+            return
+
+        if self.current_session is not None and self.current_session.id == deleted.id:
+            self.current_session = None
+            show_info("已清空当前会话状态。")
+        show_success(f"会话“{deleted.title}”已删除。")
+
+    async def _read_session_selection(self, prompt: str) -> Session | None:
+        if self.current_user is None:
+            show_warning("请先创建或切换用户。")
+            return None
+
+        sessions = await self._list_sessions()
+        if not sessions:
+            return None
+
+        raw_value = await self.get_user_input(prompt)
+        try:
+            display_index = int(raw_value)
+        except ValueError:
+            await self.display_error("请输入有效的会话序号。")
+            return None
+
+        selection_map = self._build_session_selection_map(sessions)
+        session = selection_map.get(display_index)
+        if session is None:
+            await self.display_error(f"会话序号无效，请输入 1-{len(sessions)}。")
+            return None
+        try:
+            return await self.session_manager.get_session(
+                self.current_user.id,
+                session.id,
+            )
+        except ValueError as exc:
+            await self.display_error(str(exc))
+            return None
+
+    @staticmethod
+    def _build_session_selection_map(sessions: list[Session]) -> dict[int, Session]:
+        return {
+            display_index: session
+            for display_index, session in enumerate(sessions, start=1)
         }
