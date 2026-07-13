@@ -6,7 +6,7 @@
 D:\project\langchain-chat
 ```
 
-当前已推进到 Step 10，完成对话导出与运行时模型切换。
+当前已推进到 Step 11，完成 MySQL 异步存储后端与存储切换验证。
 
 ## 计划功能
 
@@ -27,6 +27,7 @@ D:\project\langchain-chat
 - Rich
 - prompt_toolkit
 - aiosqlite
+- aiomysql
 - LangChain
 - langchain-openai
 - OpenAI SDK
@@ -74,6 +75,7 @@ langchain-chat/
     │   ├── __init__.py
     │   ├── base.py
     │   ├── factory.py
+    │   ├── mysql_backend.py
     │   └── sqlite_backend.py
     └── ui/
         ├── __init__.py
@@ -132,10 +134,21 @@ uv run python src/main.py
 uv run python -m src.main
 ```
 
-初始化 SQLite 数据库并运行冒烟测试：
+初始化当前配置的存储后端：
 
 ```powershell
 uv run python scripts/init_db.py
+```
+
+默认配置使用 SQLite。切换到 MySQL 时，需要将 `config.yaml` 中
+`storage.type` 改为 `mysql`，并在未提交的本地 `.env` 中配置：
+
+```dotenv
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=your_mysql_password_here
+MYSQL_DATABASE=langchain_chat
 ```
 
 导入 ChatEngine：
@@ -184,23 +197,23 @@ Step 15 计划采用：
 
 项目按教学步骤逐步推进。每个 Step 应只实现当前阶段要求的能力，先验证本步骤，再进入下一步。
 
-Step 10 的重点是：
+Step 11 的重点是：
 
-- 将指定会话完整导出为 Markdown。
-- 导出目录固定为 `data/users/{username}/exports/`。
-- 在设置菜单中更新当前用户的新会话默认模型。
-- 在对话中使用 `/model` 切换当前会话模型，并保留历史上下文。
-- 模型注册表由 `config.yaml` 定义，密钥仍只从本地 `.env` 环境变量读取。
+- 使用 `aiomysql` 实现 MySQL 异步存储后端。
+- MySQLBackend 实现当前 `StorageBackend` 的全部抽象方法。
+- `StorageFactory` 支持根据配置切换 SQLite 和 MySQL。
+- `scripts/init_db.py` 根据当前配置初始化 SQLite 或 MySQL 表结构。
+- MySQL 集成测试通过 `RUN_MYSQL_TESTS=1` 显式启用，默认测试不依赖外部 MySQL 服务。
 
 ## 当前 Step 状态
 
 当前处于：
 
 ```text
-Step 10  导出与模型切换
+Step 11  MySQL 存储后端
 ```
 
-已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端、用户管理菜单、预设管理菜单、无状态对话引擎、TUI 多轮流式对话视图、当前用户会话管理、历史消息搜索、Markdown 导出和运行时模型切换。MySQL 后端留到 Step 11。
+已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端、MySQL 存储后端、用户管理菜单、预设管理菜单、无状态对话引擎、TUI 多轮流式对话视图、当前用户会话管理、历史消息搜索、Markdown 导出和运行时模型切换。FileBackend 留到 Step 12。
 
 ## 后续开发说明
 

@@ -5,7 +5,7 @@
 app:
   name: langchain-chat
   version: 0.1.0
-  current_step: "Step 10  导出与模型切换"
+  current_step: "Step 11  MySQL 存储后端"
 
 llm:
   default_model: default
@@ -41,6 +41,8 @@ storage:
     user_env: MYSQL_USER
     password_env: MYSQL_PASSWORD
     database_env: MYSQL_DATABASE
+    pool_min_size: 1
+    pool_max_size: 5
   file:
     base_dir: data/users
     encoding: utf-8

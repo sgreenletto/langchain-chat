@@ -168,3 +168,16 @@
 - 验证命令及结果：`uv sync` 通过；`uv run ruff check .` 通过；`uv run pytest` 通过，8 个测试全部通过；`Get-ChildItem src\ui -Recurse -Filter *.py | Select-String "\.backend\."` 无输出；`uv run python -m src.main` 可启动并退出，横幅显示 Step 10。
 - 用户待手工验证项目：在 TUI 设置当前用户默认模型；新建会话使用新默认模型；对话中 `/model` 列表选择和直接别名切换；切换后继续多轮对话且历史上下文保留；会话管理导出 Markdown 并检查文件内容。
 - commit 信息：`feat: step 10 - 对话导出与运行时模型切换`
+
+## Step 11：MySQL 异步存储后端与存储切换验证
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 本次任务摘要：使用 `aiomysql` 实现 MySQLBackend，支持通过 `StorageFactory` 在 SQLite 与 MySQL 之间切换，并改造初始化脚本按当前配置创建表结构。
+- Codex 执行内容：检查 Step 10 标签和干净工作区；通过 `uv add aiomysql` 增加依赖；扩展 MySQL 配置校验；新增 `src/storage/mysql_backend.py`；改造 `StorageFactory` 和 `scripts/init_db.py`；补充可选 MySQL 集成测试；更新 README 和 AI 使用日志。
+- 修改文件：`.env.example`、`README.md`、`config.yaml`、`docs/ai_usage_log.md`、`pyproject.toml`、`uv.lock`、`scripts/init_db.py`、`src/core/config_manager.py`、`src/storage/__init__.py`、`src/storage/factory.py`、`src/storage/mysql_backend.py`、`tests/test_mysql_backend.py`。
+- 关键设计决策：MySQLBackend 使用连接池和 `utf8mb4`；SQL 使用 `%s` 参数占位符；数据库名使用白名单校验后才拼接；五张表保持与 SQLiteBackend 一致的业务语义；MySQL 集成测试默认跳过，仅在 `RUN_MYSQL_TESTS=1` 且配置独立测试库时启用。
+- 验证命令及结果：`uv sync` 通过；`uv run ruff check .` 通过；`uv run pytest` 通过，8 个测试通过、1 个 MySQL 集成测试因未设置 `RUN_MYSQL_TESTS=1` 跳过；`uv run python -c "from src.storage.mysql_backend import MySQLBackend; print(MySQLBackend.__name__)"` 输出 `MySQLBackend`；`uv run python scripts/init_db.py` 在默认 SQLite 配置下成功初始化五张表。
+- MySQL 集成测试状态：当前环境未声明可用的外部 MySQL 测试服务，未伪造集成测试通过。
+- 用户待手工验证项目：准备 MySQL 服务和测试数据库后设置 `RUN_MYSQL_TESTS=1`、`MYSQL_TEST_DATABASE` 及 MySQL 连接环境变量，运行 MySQL 初始化和集成测试；将 `storage.type` 切换为 `mysql` 后启动 TUI 验证用户、预设、会话、搜索、导出和模型切换流程。
+- commit 信息：`feat: step 11 - 实现 MySQL 异步存储后端`

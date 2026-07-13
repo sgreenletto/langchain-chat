@@ -30,7 +30,12 @@ class StorageFactory:
 
             return SQLiteBackend()
         if normalized_type == "mysql":
-            raise NotImplementedError("MySQL 存储后端将在 Step 11 实现。")
+            try:
+                from .mysql_backend import MySQLBackend
+            except ImportError:
+                from storage.mysql_backend import MySQLBackend
+
+            return MySQLBackend()
         if normalized_type == "file":
             raise NotImplementedError("File 存储后端将在 Step 12 实现。")
 

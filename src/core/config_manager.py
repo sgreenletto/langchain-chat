@@ -93,6 +93,8 @@ class MySQLStorageSection(BaseModel):
     user_env: str
     password_env: str
     database_env: str
+    pool_min_size: int = Field(default=1, gt=0)
+    pool_max_size: int = Field(default=5, gt=0)
 
 
 class FileStorageSection(BaseModel):
@@ -105,6 +107,16 @@ class StorageSection(BaseModel):
     sqlite: SQLiteStorageSection
     mysql: MySQLStorageSection
     file: FileStorageSection
+
+
+class MySQLRuntimeConfig(BaseModel):
+    host: str
+    port: int
+    user: str
+    password: str
+    database: str
+    pool_min_size: int
+    pool_max_size: int
 
 
 class ConversationSection(BaseModel):
@@ -252,6 +264,45 @@ class AppConfig(BaseModel):
             require_available=require_available,
         )
 
+    def get_mysql_config(self, *, require_available: bool = True) -> MySQLRuntimeConfig:
+        """Return MySQL connection settings resolved from environment variables."""
+        mysql = self.storage.mysql
+        host = self._read_env(mysql.host_env, self.env.mysql_host)
+        port_raw = self._read_env(mysql.port_env, str(self.env.mysql_port))
+        user = self._read_env(mysql.user_env, self.env.mysql_user)
+        password = self._read_env(mysql.password_env, self.env.mysql_password)
+        database = self._read_env(mysql.database_env, self.env.mysql_database)
+        missing = [
+            env_name
+            for env_name, value in (
+                (mysql.host_env, host),
+                (mysql.port_env, port_raw),
+                (mysql.user_env, user),
+                (mysql.password_env, password),
+                (mysql.database_env, database),
+            )
+            if self._is_placeholder(value)
+        ]
+        try:
+            port = int(port_raw)
+        except ValueError as exc:
+            raise ConfigError(f"MySQL 端口必须是整数：{mysql.port_env}") from exc
+
+        if require_available and missing:
+            raise ConfigError(f"MySQL 缺少必要环境变量：{'、'.join(missing)}")
+        if mysql.pool_min_size > mysql.pool_max_size:
+            raise ConfigError("MySQL 连接池最小连接数不能大于最大连接数。")
+
+        return MySQLRuntimeConfig(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            database=database,
+            pool_min_size=mysql.pool_min_size,
+            pool_max_size=mysql.pool_max_size,
+        )
+
     def _get_model_item(self, model_alias: str) -> ModelRegistryItem:
         for item in self.llm.available_models:
             if item.alias == model_alias:
@@ -342,6 +393,8 @@ def get_config() -> AppConfig:
             project_root=root,
         )
         config.get_default_model_config()
+        if config.storage.type == "mysql":
+            config.get_mysql_config(require_available=True)
         return config
     except ValidationError as exc:
         raise ConfigError(
