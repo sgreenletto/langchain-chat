@@ -75,7 +75,7 @@ class TUIApp(AbstractUI):
 
     async def run(self) -> None:
         """Run the async TUI main loop."""
-        show_banner()
+        show_banner(self.config.current_step)
         show_success(f"已加载配置：{self.config.app.name} v{self.config.app.version}")
 
         while True:

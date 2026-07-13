@@ -12,11 +12,11 @@ console = Console()
 prompt_session: PromptSession[str] | None = None
 
 
-def show_banner() -> None:
+def show_banner(current_step: str = "Step 5：预设管理") -> None:
     """Display the startup banner."""
     banner = (
         "[bold]langchain-chat[/bold]\n"
-        "Step 5：预设管理\n"
+        f"{current_step}\n"
         f"Python 版本：{platform.python_version()}\n"
         f"运行平台：{platform.platform()}"
     )

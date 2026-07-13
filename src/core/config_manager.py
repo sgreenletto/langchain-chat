@@ -36,6 +36,7 @@ class EnvSettings(BaseSettings):
 class AppSection(BaseModel):
     name: str
     version: str
+    current_step: str = "Step 6  对话引擎"
 
 
 class AvailableModel(BaseModel):
@@ -94,6 +95,40 @@ class AppConfig(BaseModel):
     export: ExportSection
     env: EnvSettings
     project_root: Path
+
+    @property
+    def current_step(self) -> str:
+        return self.app.current_step
+
+    @property
+    def temperature(self) -> float:
+        return self.llm.temperature
+
+    @property
+    def max_tokens(self) -> int:
+        return self.llm.max_tokens
+
+    @property
+    def llm_timeout(self) -> int:
+        return self.llm.timeout
+
+    @property
+    def llm_max_retries(self) -> int:
+        return self.llm.max_retries
+
+    @property
+    def api_base_url(self) -> str:
+        return self.env.api_base_url
+
+    @property
+    def api_key(self) -> str:
+        return self.env.api_key
+
+    @property
+    def model_name(self) -> str:
+        if self.env.model_name and self.env.model_name != "your_model_name_here":
+            return self.env.model_name
+        return self.llm.default_model
 
 
 def _project_root() -> Path:

@@ -5,6 +5,7 @@
 app:
   name: langchain-chat
   version: 0.1.0
+  current_step: "Step 6  对话引擎"
 
 llm:
   default_model: example-chat-model

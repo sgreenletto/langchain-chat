@@ -106,3 +106,15 @@
 - 修改文件：`src/ui/tui/app.py`、`docs/ai_usage_log.md`。
 - 验证结果：`uv run python -m compileall src` 通过；`uv run python src/main.py` 可启动并通过输入 `7` 退出；使用已有用户 `bob` 只读进入预设列表，确认表头不再包含“数据库 ID”列，当前用户状态只显示用户名；`git diff --check` 待最终检查。
 - 用户待手工验证项目：预设列表没有“数据库 ID”列；预设序号从 1 开始；编辑/删除输入展示序号且能定位正确对象；当前用户状态只显示用户名；内置预设仍不可编辑和删除；不同用户的私人预设仍隔离；重复启动后内置预设不重复。
+
+## Step 6：对话引擎
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 本次任务摘要：实现无状态 `ChatEngine`，支持 OpenAI 兼容 API、完整 LangChain 消息历史、非流式调用、异步流式输出、Token 用量提取、超时和自动重试；本步骤不接入完整 TUI 对话循环。
+- Codex 执行内容：检查 Step 5 标签和干净工作区；通过 `uv add` 添加 `langchain`、`langchain-openai`、`openai`、`httpx`；检查本地 `ChatOpenAI` 构造签名；补齐配置管理出口；实现 ChatEngine、三层调用示例和冒烟脚本；补充无外部依赖的单元测试。
+- 修改文件：`pyproject.toml`、`uv.lock`、`config.yaml`、`README.md`、`docs/ai_usage_log.md`、`src/core/config_manager.py`、`src/core/chat_engine.py`、`src/ui/tui/widgets.py`、`src/ui/tui/app.py`、`examples/__init__.py`、`examples/example1_http.py`、`examples/example2_openai_sdk.py`、`examples/example3_langchain.py`、`scripts/test_chat_engine.py`、`tests/test_chat_engine.py`。
+- 关键设计决策：`ChatEngine` 不保存用户、会话或消息历史；调用方每次传入完整 `BaseMessage` 列表；流式接口通过最终 `ChatStreamEvent(is_final=True)` 暴露 Token 用量；未返回 usage 时标记为“服务未提供”，不伪造 Token。
+- 验证命令及结果：`uv sync` 成功；`uv run ruff check .` 通过；`uv run pytest` 通过，7 个测试全部通过；`uv run python -c "from src.core.chat_engine import ChatEngine; print(ChatEngine.__name__)"` 输出 `ChatEngine`；`uv run python -m examples.example1_http`、`example2_openai_sdk`、`example3_langchain` 均调用成功且未输出密钥；`uv run python scripts/test_chat_engine.py` 完成非流式、历史、SystemMessage、流式和异常处理冒烟测试，并获得服务返回的 Token usage。
+- 未完成项目：未实现 Step 7 的完整 TUI 对话循环；未修改数据库结构；未新增会话管理或对话持久化逻辑。
+- commit 信息：`feat: step 6 - 对话引擎（LLM 调用、流式输出、Token 统计）与 LLM 编程示例`

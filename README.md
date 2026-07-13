@@ -6,7 +6,7 @@
 D:\project\langchain-chat
 ```
 
-当前已推进到 Step 5，完成预设管理业务层、TUI 预设菜单与内置预设幂等导入。
+当前已推进到 Step 6，完成无状态对话引擎、OpenAI 兼容 LLM 调用封装、流式输出与 Token 用量提取。
 
 ## 计划功能
 
@@ -27,7 +27,10 @@ D:\project\langchain-chat
 - Rich
 - prompt_toolkit
 - aiosqlite
-- LangChain（后续步骤引入）
+- LangChain
+- langchain-openai
+- OpenAI SDK
+- httpx
 - SQLite / MySQL / 文件存储（后续步骤实现）
 - Ruff、pytest（保留基础配置，后续步骤使用）
 
@@ -46,11 +49,17 @@ langchain-chat/
 │   └── presets.yaml
 ├── docs/
 │   └── ai_usage_log.md
+├── examples/
+│   ├── __init__.py
+│   ├── example1_http.py
+│   ├── example2_openai_sdk.py
+│   └── example3_langchain.py
 └── src/
     ├── __init__.py
     ├── main.py
     ├── core/
     │   ├── __init__.py
+    │   ├── chat_engine.py
     │   ├── config_manager.py
     │   ├── preset_manager.py
     │   └── user_manager.py
@@ -75,7 +84,8 @@ langchain-chat/
             └── widgets.py
 ├── scripts/
 │   ├── __init__.py
-│   └── init_db.py
+│   ├── init_db.py
+│   └── test_chat_engine.py
 └── tests/
     ├── __init__.py
     └── test_sqlite_backend.py
@@ -127,6 +137,21 @@ uv run python -m src.main
 uv run python scripts/init_db.py
 ```
 
+导入 ChatEngine：
+
+```powershell
+uv run python -c "from src.core.chat_engine import ChatEngine; print(ChatEngine.__name__)"
+```
+
+在本地 `.env` 配置有效 OpenAI 兼容服务后，可运行 Step 6 示例：
+
+```powershell
+uv run python -m examples.example1_http
+uv run python -m examples.example2_openai_sdk
+uv run python -m examples.example3_langchain
+uv run python scripts/test_chat_engine.py
+```
+
 ## .env.example 使用说明
 
 `.env.example` 只保存变量模板和占位值，不保存真实 API Key、数据库密码或令牌。
@@ -152,22 +177,22 @@ Step 15 计划采用：
 
 项目按教学步骤逐步推进。每个 Step 应只实现当前阶段要求的能力，先验证本步骤，再进入下一步。
 
-Step 5 的重点是：
+Step 6 的重点是：
 
-- 从 `config/presets.yaml` 幂等导入系统内置预设。
-- 使用 PresetManager 封装预设权限和用户隔离规则。
-- 将 TUI 预设菜单接入 PresetManager。
-- 支持当前用户自定义预设的创建、查看、编辑和删除。
+- 使用 `ChatEngine` 封装 OpenAI 兼容 LLM 调用。
+- 输入完整 LangChain `BaseMessage` 历史，不在引擎内部保存会话状态。
+- 支持非流式调用、异步流式输出、超时重试和 Token 用量提取。
+- 保留 HTTP、OpenAI SDK、LangChain 三层调用示例。
 
 ## 当前 Step 状态
 
 当前处于：
 
 ```text
-Step 5：预设管理模块与 TUI 预设菜单
+Step 6  对话引擎
 ```
 
-已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端、用户管理菜单和预设管理菜单。尚未实现会话管理、多轮对话、模型切换或 LangChain 调用。
+已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端、用户管理菜单、预设管理菜单和无状态对话引擎。尚未将完整 TUI 对话循环接入 ChatEngine，该部分留到 Step 7。
 
 ## 后续开发说明
 
