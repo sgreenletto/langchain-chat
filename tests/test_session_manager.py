@@ -42,9 +42,10 @@ async def exercise_session_manager(db_path):
             preset_id=preset.id,
         )
         await manager.save_user_message(session, "你好")
+        await manager.save_user_message(session, "search target 中文关键词")
         _, session = await manager.save_ai_message_and_update_session(
             session,
-            "你好，我在。",
+            "hello search reply",
             prompt_tokens=7,
             completion_tokens=5,
         )
@@ -55,8 +56,16 @@ async def exercise_session_manager(db_path):
         messages = await manager.load_langchain_messages(session)
         assert isinstance(messages[0], SystemMessage)
         assert isinstance(messages[1], HumanMessage)
-        assert isinstance(messages[2], AIMessage)
+        assert isinstance(messages[3], AIMessage)
         assert sum(isinstance(message, SystemMessage) for message in messages) == 1
+        stored_messages = await manager.get_session_messages(alice.id, session.id)
+        assert [message.role for message in stored_messages] == ["human", "human", "ai"]
+        assert await manager.search_messages(alice.id, "   ") == []
+        chinese_results = await manager.search_messages(alice.id, "中文关键词")
+        assert len(chinese_results) == 1
+        english_results = await manager.search_messages(alice.id, "search")
+        assert len(english_results) == 2
+        assert await manager.search_messages(bob.id, "search") == []
 
         assert await manager.get_user_session(alice.id, session.id) is not None
         assert await manager.get_user_session(bob.id, session.id) is None
@@ -86,6 +95,8 @@ async def exercise_session_manager(db_path):
         assert await backend.list_messages(session.id) == []
         with pytest.raises(ValueError, match="不属于当前用户"):
             await manager.get_session(alice.id, session.id)
+        with pytest.raises(ValueError, match="不属于当前用户"):
+            await manager.get_session_messages(alice.id, session.id)
     finally:
         await backend.close()
 

@@ -61,6 +61,23 @@ class SessionManager:
         """Return a session after validating ownership."""
         return await self._require_session_owner(user_id, session_id)
 
+    async def get_session_messages(
+        self,
+        user_id: int,
+        session_id: int,
+    ) -> list[Message]:
+        """Return messages for a user-owned session in chronological order."""
+        session = await self._require_session_owner(user_id, session_id)
+        return await self.backend.list_messages(session.id)
+
+    async def search_messages(self, user_id: int, keyword: str) -> list[Message]:
+        """Search messages for one user after validating input."""
+        await self._require_user(user_id)
+        normalized_keyword = keyword.strip()
+        if not normalized_keyword:
+            return []
+        return await self.backend.search_messages(user_id, normalized_keyword)
+
     async def get_user_session(self, user_id: int, session_id: int) -> Session | None:
         """Return a session only when it belongs to the user."""
         try:

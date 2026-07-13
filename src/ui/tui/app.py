@@ -1,5 +1,6 @@
 """Rich-based TUI application."""
 
+from rich.markup import escape
 from rich.table import Table
 
 from core.chat_engine import ChatEngine
@@ -39,7 +40,6 @@ class TUIApp(AbstractUI):
         chat_engine: ChatEngine | None = None,
     ) -> None:
         self.config = config
-        self.backend = backend
         self.user_manager = user_manager or UserManager(backend)
         self.preset_manager = preset_manager or PresetManager(backend)
         self.session_manager = session_manager or SessionManager(backend)
@@ -51,6 +51,7 @@ class TUIApp(AbstractUI):
             "会话管理",
             "预设管理",
             "开始对话",
+            "搜索历史消息",
             "设置",
             "关于",
             "退出",
@@ -71,6 +72,7 @@ class TUIApp(AbstractUI):
         ]
         self.session_menu_options = [
             "查看会话列表",
+            "查看会话记录",
             "加载会话",
             "重命名会话",
             "删除会话",
@@ -121,13 +123,15 @@ class TUIApp(AbstractUI):
             case "4":
                 await start_chat(self)
             case "5":
-                await menu_view.show_settings()
+                await self._search_messages()
             case "6":
-                await menu_view.show_about()
+                await menu_view.show_settings()
             case "7":
+                await menu_view.show_about()
+            case "8":
                 return True
             case _:
-                await self.display_error("无效菜单编号，请输入 1-7。")
+                await self.display_error("无效菜单编号，请输入 1-8。")
         return False
 
     def _show_current_user(self) -> None:
@@ -169,7 +173,7 @@ class TUIApp(AbstractUI):
         try:
             user = await self.user_manager.create_user(
                 username,
-                default_model=self.config.llm.default_model,
+                default_model=self.config.model_name,
             )
         except ValueError as exc:
             await self.display_error(str(exc))
@@ -503,15 +507,17 @@ class TUIApp(AbstractUI):
                 case "1":
                     await self._list_sessions()
                 case "2":
-                    await self._load_session()
+                    await self._show_session_messages()
                 case "3":
-                    await self._rename_session()
+                    await self._load_session()
                 case "4":
-                    await self._delete_session()
+                    await self._rename_session()
                 case "5":
+                    await self._delete_session()
+                case "6":
                     return
                 case _:
-                    await self.display_error("无效菜单编号，请输入 1-5。")
+                    await self.display_error("无效菜单编号，请输入 1-6。")
 
     async def _list_sessions(self) -> list[Session]:
         if self.current_user is None:
@@ -557,6 +563,32 @@ class TUIApp(AbstractUI):
             return
         self.current_session = session
         show_success(f"已加载会话：{session.title}")
+
+    async def _show_session_messages(self) -> None:
+        if self.current_user is None:
+            show_warning("请先创建或切换用户。")
+            return
+
+        session = await self._read_session_selection("请输入要查看记录的会话序号：")
+        if session is None:
+            return
+
+        messages = await self.session_manager.get_session_messages(
+            self.current_user.id,
+            session.id,
+        )
+        if not messages:
+            show_info("该会话还没有任何消息。")
+            return
+
+        show_separator()
+        show_info(f"会话记录：{session.title}")
+        for message in messages:
+            role_name = self._display_message_role(message.role)
+            console.print(
+                f"[bold]{role_name}[/bold]：{escape(message.content)}"
+            )
+        show_separator()
 
     async def _rename_session(self) -> None:
         if self.current_user is None:
@@ -649,3 +681,56 @@ class TUIApp(AbstractUI):
             display_index: session
             for display_index, session in enumerate(sessions, start=1)
         }
+
+    async def _search_messages(self) -> None:
+        if self.current_user is None:
+            show_warning("请先创建或切换用户。")
+            return
+
+        keyword = await self.get_user_input("请输入搜索关键词：")
+        if not keyword.strip():
+            show_warning("搜索关键词不能为空。")
+            return
+
+        messages = await self.session_manager.search_messages(
+            self.current_user.id,
+            keyword,
+        )
+        if not messages:
+            show_info("没有找到匹配的历史消息。")
+            return
+
+        sessions = await self.session_manager.list_sessions(self.current_user.id)
+        session_map = {session.id: session for session in sessions}
+        grouped_messages: dict[int, list] = {}
+        for message in messages:
+            if message.session_id in session_map:
+                grouped_messages.setdefault(message.session_id, []).append(message)
+
+        show_separator()
+        show_info(
+            f"搜索结果：共 {len(messages)} 条，涉及 {len(grouped_messages)} 个会话。"
+        )
+        for display_index, (session_id, session_messages) in enumerate(
+            grouped_messages.items(),
+            start=1,
+        ):
+            session = session_map[session_id]
+            console.print(
+                f"[bold cyan]{display_index}. {escape(session.title)}[/bold cyan]"
+            )
+            for message in session_messages:
+                role_name = self._display_message_role(message.role)
+                console.print(
+                    f"  [bold]{role_name}[/bold]：{escape(message.content)}"
+                )
+        show_separator()
+
+    @staticmethod
+    def _display_message_role(role: str) -> str:
+        role_names = {
+            "human": "用户",
+            "ai": "AI",
+            "system": "系统",
+        }
+        return role_names.get(role, role)

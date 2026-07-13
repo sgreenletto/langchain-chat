@@ -5,7 +5,7 @@
 app:
   name: langchain-chat
   version: 0.1.0
-  current_step: "Step 8  会话管理完善"
+  current_step: "Step 9  对话搜索"
 
 llm:
   default_model: example-chat-model

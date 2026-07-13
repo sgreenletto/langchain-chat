@@ -142,3 +142,17 @@
 - 验证命令及结果：`uv sync` 通过；`uv run ruff check .` 通过；`uv run pytest` 通过，8 个测试全部通过；`Get-ChildItem src\ui -Recurse -Filter *.py | Select-String "\.backend\."` 无输出；`uv run python -m compileall src tests` 通过；`uv run python -m src.main` 可启动并退出，横幅显示 Step 8；自动输入“会话管理”验证未登录保护通过。
 - 用户待手工验证项目：空会话列表、多个会话排序、加载历史继续对话、重命名、空标题拒绝、删除取消、删除确认、删除后消息不可加载、删除当前会话后状态清空、用户隔离、列表序号从 1 开始。
 - commit 信息：`feat: step 8 - 完善会话列表、加载、重命名与删除`
+
+## Step 9：对话搜索、查看会话记录与模型配置源修复
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 本次任务摘要：修复用户和会话记录模型名来源不一致问题；在会话管理中增加完整会话记录查看；在主菜单中增加当前用户范围内的历史消息关键词搜索。
+- Codex 执行内容：检查 Step 8 标签和干净工作区；确认 ChatEngine 实际使用 `config.model_name`；将用户默认模型和新建会话模型统一为 `config.model_name`；扩展 SessionManager 搜索和会话消息读取接口；在 TUIApp 中实现记录查看和搜索结果按会话分组显示。
+- 修改文件：`config.yaml`、`README.md`、`docs/ai_usage_log.md`、`src/core/session_manager.py`、`src/ui/tui/app.py`、`tests/test_session_manager.py`。
+- 关键设计决策：旧数据库中的历史模型名不自动迁移；搜索空关键词直接返回空结果；UI 不访问 backend；搜索结果先构造当前用户 session map，再按会话分组，避免每条消息重复查询会话。
+- 验证命令及结果：`uv sync` 通过；`uv run ruff check .` 通过；`uv run pytest` 通过，8 个测试全部通过；`Get-ChildItem src\ui -Recurse -Filter *.py | Select-String "\.backend\."` 无输出；`uv run python -m compileall src tests` 通过；`uv run python -m src.main` 可启动并退出，横幅显示 Step 9；配置源检查确认 `config.model_name` 与 `ChatEngine.model_name` 一致。
+- 自动测试覆盖：业务层测试覆盖会话消息读取、中文关键词搜索、英文关键词搜索、空关键词返回空结果、用户隔离和删除会话后的归属校验；TUI 完整交互仍列为人工验证。
+- 旧数据影响：不会自动修改旧用户或旧会话中已经记录的历史模型名；修复只影响后续新建用户和新建会话。
+- 用户待手工验证项目：新用户和新会话模型名与 ChatEngine 一致；查看有消息和空会话；搜索中文、英文、不存在和空关键词；多个会话分组；用户隔离；Rich 输出无 markup 异常；Step 7/8 对话、加载、重命名和删除功能未回归。
+- commit 信息：`feat: step 9 - 对话搜索（E1）+ 查看会话记录 + 模型名 bug 修复`
