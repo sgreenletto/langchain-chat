@@ -2,8 +2,10 @@
 
 from rich.table import Table
 
+from core.chat_engine import ChatEngine
 from core.config_manager import AppConfig
 from core.preset_manager import PresetManager
+from core.session_manager import SessionManager
 from core.user_manager import UserManager
 from interface.ui_protocol import AbstractUI
 from models.schemas import Preset, User
@@ -27,11 +29,21 @@ from ui.tui.widgets import (
 class TUIApp(AbstractUI):
     """Terminal UI application."""
 
-    def __init__(self, config: AppConfig, backend: StorageBackend) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        backend: StorageBackend,
+        user_manager: UserManager | None = None,
+        preset_manager: PresetManager | None = None,
+        session_manager: SessionManager | None = None,
+        chat_engine: ChatEngine | None = None,
+    ) -> None:
         self.config = config
         self.backend = backend
-        self.user_manager = UserManager(backend)
-        self.preset_manager = PresetManager(backend)
+        self.user_manager = user_manager or UserManager(backend)
+        self.preset_manager = preset_manager or PresetManager(backend)
+        self.session_manager = session_manager or SessionManager(backend)
+        self.chat_engine = chat_engine or ChatEngine(config)
         self.current_user: User | None = None
         self.current_session = None
         self.menu_options = [
@@ -100,7 +112,7 @@ class TUIApp(AbstractUI):
             case "3":
                 await self._show_preset_menu()
             case "4":
-                await start_chat()
+                await start_chat(self)
             case "5":
                 await menu_view.show_settings()
             case "6":

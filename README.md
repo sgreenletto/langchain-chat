@@ -6,7 +6,7 @@
 D:\project\langchain-chat
 ```
 
-当前已推进到 Step 6，完成无状态对话引擎、OpenAI 兼容 LLM 调用封装、流式输出与 Token 用量提取。
+当前已推进到 Step 7，完成会话管理业务层与 TUI 多轮流式对话视图对接。
 
 ## 计划功能
 
@@ -62,6 +62,7 @@ langchain-chat/
     │   ├── chat_engine.py
     │   ├── config_manager.py
     │   ├── preset_manager.py
+    │   ├── session_manager.py
     │   └── user_manager.py
     ├── interface/
     │   ├── __init__.py
@@ -177,22 +178,22 @@ Step 15 计划采用：
 
 项目按教学步骤逐步推进。每个 Step 应只实现当前阶段要求的能力，先验证本步骤，再进入下一步。
 
-Step 6 的重点是：
+Step 7 的重点是：
 
-- 使用 `ChatEngine` 封装 OpenAI 兼容 LLM 调用。
-- 输入完整 LangChain `BaseMessage` 历史，不在引擎内部保存会话状态。
-- 支持非流式调用、异步流式输出、超时重试和 Token 用量提取。
-- 保留 HTTP、OpenAI SDK、LangChain 三层调用示例。
+- 使用 `SessionManager` 封装会话创建、消息保存、历史加载和标题更新。
+- 将 Step 6 的无状态 `ChatEngine` 接入 TUI 对话视图。
+- 支持预设选择、多轮上下文、流式回复、Token 展示和输入历史。
+- 支持 `/help`、`/rename`、`/new`、`/exit` 基础命令。
 
 ## 当前 Step 状态
 
 当前处于：
 
 ```text
-Step 6  对话引擎
+Step 7  对话视图
 ```
 
-已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端、用户管理菜单、预设管理菜单和无状态对话引擎。尚未将完整 TUI 对话循环接入 ChatEngine，该部分留到 Step 7。
+已建立基础工程结构、Pydantic 数据模型、异步存储接口、配置管理、TUI 主菜单骨架、SQLite 存储后端、用户管理菜单、预设管理菜单、无状态对话引擎和 TUI 多轮流式对话视图。完整会话列表、重命名和删除管理留到 Step 8。
 
 ## 后续开发说明
 

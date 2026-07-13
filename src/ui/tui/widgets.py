@@ -4,6 +4,7 @@ import asyncio
 import platform
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.history import InMemoryHistory
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -75,6 +76,23 @@ async def read_text(prompt: str, default: str = "") -> str:
 
 async def read_choice(prompt: str = "请选择菜单编号：") -> str:
     return await read_text(prompt)
+
+
+async def read_chat_input(
+    prompt: str = "你：",
+    history: InMemoryHistory | None = None,
+) -> str | None:
+    """Read one chat input line with optional prompt_toolkit history."""
+    try:
+        session: PromptSession[str] = PromptSession(history=history)
+        return (await session.prompt_async(prompt)).strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    except Exception:
+        try:
+            return (await asyncio.to_thread(console.input, prompt)).strip()
+        except (EOFError, KeyboardInterrupt):
+            return None
 
 
 def show_separator() -> None:

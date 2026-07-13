@@ -118,3 +118,15 @@
 - 验证命令及结果：`uv sync` 成功；`uv run ruff check .` 通过；`uv run pytest` 通过，7 个测试全部通过；`uv run python -c "from src.core.chat_engine import ChatEngine; print(ChatEngine.__name__)"` 输出 `ChatEngine`；`uv run python -m examples.example1_http`、`example2_openai_sdk`、`example3_langchain` 均调用成功且未输出密钥；`uv run python scripts/test_chat_engine.py` 完成非流式、历史、SystemMessage、流式和异常处理冒烟测试，并获得服务返回的 Token usage。
 - 未完成项目：未实现 Step 7 的完整 TUI 对话循环；未修改数据库结构；未新增会话管理或对话持久化逻辑。
 - commit 信息：`feat: step 6 - 对话引擎（LLM 调用、流式输出、Token 统计）与 LLM 编程示例`
+
+## Step 7：会话管理与 TUI 多轮流式对话
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- 本次任务摘要：实现 `SessionManager` 会话业务层，并将 Step 6 的无状态 `ChatEngine` 接入 TUI 对话视图，支持登录保护、新建/继续会话、预设选择、多轮上下文、流式回复、Token 累计、消息持久化和基础斜杠命令。
+- Codex 执行内容：检查 Step 6 标签和干净工作区；新增 `src/core/session_manager.py`；替换 `src/ui/tui/chat_view.py` 桩函数；改造 `TUIApp` 和 `main.py` 为依赖注入；补充 prompt_toolkit 对话输入历史；更新当前步骤配置、README 和测试。
+- 修改文件：`config.yaml`、`README.md`、`docs/ai_usage_log.md`、`src/core/session_manager.py`、`src/main.py`、`src/storage/base.py`、`src/storage/factory.py`、`src/storage/__init__.py`、`src/ui/tui/app.py`、`src/ui/tui/chat_view.py`、`src/ui/tui/widgets.py`、`tests/test_session_manager.py`。
+- 关键设计决策：`ChatEngine` 继续无状态；`SessionManager` 通过 `StorageBackend` 抽象操作会话和消息；TUI 只负责交互展示；所有列表选择使用从 1 开始的临时序号，不显示或要求用户输入数据库 ID。
+- 验证命令及结果：`uv sync` 通过；`uv run ruff check .` 通过；`uv run pytest` 通过，8 个测试全部通过；`uv run python -c "from src.core.session_manager import SessionManager; print(SessionManager.__name__)"` 输出 `SessionManager`；`uv run python -m compileall src scripts tests` 通过；`uv run python -m src.main` 可启动并退出，横幅显示 Step 7；自动输入“开始对话”验证未登录保护通过。
+- 用户待手工验证项目：预设选择、无预设会话、流式回复、多轮记忆、Token 展示、`/help`、`/rename`、`/new`、`/exit`、上箭头输入历史、重启后加载历史继续、用户 A 与用户 B 数据隔离。
+- commit 信息：`feat: step 7 - 会话管理与 TUI 多轮流式对话`

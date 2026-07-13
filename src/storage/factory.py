@@ -1,6 +1,9 @@
 """Storage backend factory."""
 
-from storage.base import StorageBackend
+try:
+    from .base import StorageBackend
+except ImportError:
+    from storage.base import StorageBackend
 
 
 class StorageFactory:
@@ -10,14 +13,20 @@ class StorageFactory:
     def create(storage_type: str | None = None) -> StorageBackend:
         """Return a storage backend for the requested type."""
         if storage_type is None:
-            from core.config_manager import get_config
+            try:
+                from ..core.config_manager import get_config
+            except ImportError:
+                from core.config_manager import get_config
 
             storage_type = get_config().storage.type
 
         normalized_type = storage_type.strip().lower()
 
         if normalized_type == "sqlite":
-            from storage.sqlite_backend import SQLiteBackend
+            try:
+                from .sqlite_backend import SQLiteBackend
+            except ImportError:
+                from storage.sqlite_backend import SQLiteBackend
 
             return SQLiteBackend()
         if normalized_type == "mysql":

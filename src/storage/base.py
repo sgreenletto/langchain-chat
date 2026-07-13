@@ -2,7 +2,10 @@
 
 from abc import ABC, abstractmethod
 
-from models.schemas import Message, Preset, Session, User, UserConfig
+try:
+    from ..models.schemas import Message, Preset, Session, User, UserConfig
+except ImportError:
+    from models.schemas import Message, Preset, Session, User, UserConfig
 
 
 class StorageBackend(ABC):
