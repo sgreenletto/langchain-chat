@@ -5,7 +5,6 @@ import asyncio
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from src.core.chat_engine import ChatEngine, TokenUsage
-from src.core.config_manager import get_config
 
 
 def test_extract_usage_from_usage_metadata():
@@ -56,8 +55,16 @@ def test_validate_messages_accepts_base_messages():
     ChatEngine._validate_messages([HumanMessage(content="hello")])
 
 
-def test_close_is_idempotent():
-    engine = ChatEngine(get_config())
+def test_close_is_idempotent(test_config, monkeypatch):
+    class FakeModel:
+        async_client = None
+
+    def fake_get_model(self, model_alias):
+        self._models[model_alias] = FakeModel()
+        return self._models[model_alias]
+
+    monkeypatch.setattr(ChatEngine, "_get_model", fake_get_model)
+    engine = ChatEngine(test_config)
 
     async def close_twice() -> None:
         await engine.close()

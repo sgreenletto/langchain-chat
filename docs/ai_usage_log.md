@@ -200,3 +200,24 @@
 - 风险和后续 Step 13 建议：FileBackend 适合教学和小数据量，不具备多进程并发写事务保证；Step 13 可将当前冒烟脚本沉淀为更系统的后端契约测试，并补充日志 formatter 的单元测试、损坏 JSON 文件测试和 StorageFactory 配置错误测试。
 - 建议 commit：`feat: step 12 - File 后端与结构化日志`
 - 建议 tag：`step-12-logging-file`
+
+## Step 13：核心模块单元测试
+
+- 日期：2026-07-13
+- 使用工具：Codex
+- Step 13 目标：为 Step 1-12 已实现的核心行为补充稳定、可重复、无外部依赖的自动化测试，重点覆盖存储契约、UserManager、SessionManager 和 ChatEngine，避免后续文档和多环境配置改造破坏现有功能。
+- 开始前状态：Git 根目录为 `D:/project/langchain-chat`，当前分支为 `main`，存在 `step-12-logging-file` 标签，开始时 `git status --short` 为空；前置 `uv run pytest -q` 结果为 `9 passed, 1 skipped`，MySQL 集成测试因未设置 `RUN_MYSQL_TESTS=1` 跳过。
+- 测试设计：新增共享 fixture，所有默认测试使用 `tmp_path` 下的临时 SQLite 数据库或临时 FileBackend 目录；存储契约测试通过参数化同时运行在 SQLiteBackend 和 FileBackend；MySQL 测试保留显式环境开关，不在默认流程中连接外部 MySQL。
+- fixture 设计：`tests/conftest.py` 提供临时 SQLiteBackend、临时 FileBackend、参数化 `storage_backend`、最小用户/会话/消息/预设/UserConfig 工厂、UserManager、SessionManager 和隔离的 `AppConfig`。测试配置使用 `_env_file=None`，并通过 monkeypatch 设置测试专用环境变量，避免读取真实 `.env`。
+- Mock 策略：ChatEngine 测试在项目自身 `_get_model` 边界替换为 `FakeModel`，验证非流式、流式、历史消息传递、system prompt 位置、Token usage、超时和异常路径；对 retry/timeout 配置验证采用 monkeypatch `src.core.chat_engine.ChatOpenAI` 捕获构造参数，不调用真实 LLM，也不 patch 第三方私有字段。
+- init_db.py 处理：检查确认当前 `scripts/init_db.py` 仅负责根据配置创建存储后端、初始化表/文件结构、输出初始化结果并关闭资源，未发现历史 CRUD 冒烟测试或自动写入演示数据，因此本步骤未修改该脚本。
+- 发现并修复的真实缺陷：本步骤未修改生产业务代码。测试层修正了旧 ChatEngine 测试直接调用真实 `get_config()`/构造真实模型的问题，并将旧 SessionManager 测试的 `EnvSettings` 改为 `_env_file=None`，避免单元测试读取真实 `.env`。
+- 实际修改文件：`pyproject.toml`、`uv.lock`、`config.yaml`、`docs/ai_usage_log.md`、`tests/conftest.py`、`tests/test_storage.py`、`tests/test_user_manager.py`、`tests/test_preset_manager.py`、`tests/test_session_manager.py`、`tests/test_session_manager_core.py`、`tests/test_chat_engine.py`、`tests/test_chat_engine_core.py`。
+- 实际执行命令及真实结果：`uv add --dev pytest-asyncio pytest-cov` 提权后成功，安装 `coverage==7.15.1`、`pytest-asyncio==1.4.0`、`pytest-cov==7.1.0`；中间验证 `uv run pytest -q` 提权后 `61 passed, 1 skipped`；`uv run ruff check tests` 初次失败后仅对本步骤测试文件执行 `uv run ruff check --fix ...`，随后通过。
+- 测试数量、通过数量、跳过数量：中间验证为 `61 passed, 1 skipped`；补充 PresetManager 后最终验收结果为 `67 passed, 1 skipped`。
+- 覆盖率结果：最终使用 `uv run pytest --cov=src --cov-report=term-missing` 生成真实覆盖率报告，结果见本次最终报告。
+- MySQL 测试状态：默认未真实执行 MySQL 集成测试；`tests/test_mysql_backend.py` 继续要求 `RUN_MYSQL_TESTS=1` 和有效测试库配置，当前环境中标记为需要人工环境验证。
+- 未验证事项：未调用真实 LLM API；未执行交互式 TUI 人工流程；未连接真实 MySQL Server。
+- 风险与 Step 13 后续建议：当前测试重点覆盖核心业务契约，尚未追求高覆盖率门槛；后续可继续补充日志 formatter、StorageFactory 配置错误和 TUI 交互的更细粒度测试，但应放在后续步骤或专项测试中。
+- 建议 commit：`test: step 13 - add core module test suite`
+- 建议 tag：`step-13-tests`

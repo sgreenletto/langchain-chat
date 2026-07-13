@@ -5,7 +5,7 @@
 app:
   name: langchain-chat
   version: 0.1.0
-  current_step: "Step 12 File 后端与日志系统"
+  current_step: "Step 13 核心模块单元测试"
 
 llm:
   default_model: default

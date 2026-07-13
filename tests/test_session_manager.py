@@ -1,4 +1,4 @@
-"""Tests for the Step 7 SessionManager business layer."""
+"""Unit tests for SessionManager business behavior."""
 
 import asyncio
 import sys
@@ -77,6 +77,7 @@ def make_test_config(tmp_path: Path) -> AppConfig:
             "filename_template": "{conversation_id}_{timestamp}.{format}",
         },
         env=EnvSettings(
+            _env_file=None,
             api_base_url="https://unit.test/v1",
             api_key="unit-test-key",
             model_name="test-default-model",
