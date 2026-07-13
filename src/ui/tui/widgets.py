@@ -16,7 +16,7 @@ def show_banner() -> None:
     """Display the Step 2 startup banner."""
     banner = (
         "[bold]langchain-chat[/bold]\n"
-        "Step 2：数据模型与 TUI 骨架\n"
+        "Step 4：用户管理模块与 TUI 用户菜单\n"
         f"Python 版本：{platform.python_version()}\n"
         f"运行平台：{platform.platform()}"
     )
