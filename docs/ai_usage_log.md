@@ -238,3 +238,23 @@
 - 未完成事项：未执行真实 LLM 调用；未运行真实 MySQL 集成测试；未做交互式 TUI 人工全流程；未实现 Step 15 多环境加载。
 - 建议 commit：`docs: step 14 - add architecture and extension contracts`
 - 建议 tag：`step-14-docs-extend`
+
+## Step 15：dev/test/prod 多环境配置隔离
+
+- 日期：2026-07-14
+- 使用工具：Codex
+- REQ-001：实现 dev、test、prod 三套业务配置、敏感信息和数据源隔离，通过 `APP_ENV` 一键切换；禁止 prod 回退到 dev。
+- 开始前状态：Git 根目录为 `D:/project/langchain-chat`，当前分支为 `main`，存在 `step-14-docs-extend` 标签，开始时 `git status --short` 为空；前置 `uv sync` 通过，前置 `uv run pytest -q` 结果为 `67 passed, 1 skipped`。
+- APP_ENV 规则：从进程环境变量读取，未设置默认 `dev`；去除首尾空格并转小写；只允许 `dev`、`test`、`prod`；非法值抛出 `ConfigError`，不静默回退。
+- YAML 深度合并：最终配置为 `config.yaml + config.{APP_ENV}.yaml`；mapping 递归合并，scalar 覆盖，list 整体替换；合并函数不修改基础配置对象；缺失或非法 YAML 抛出 `ConfigError`。
+- dotenv 选择和优先级：只加载当前 `.env.{env}`，不再默认加载旧 `.env`；使用 `load_dotenv(..., override=False)` 保证操作系统/PowerShell 环境变量优先；不读取其他环境 dotenv 作为回退。
+- 三环境数据源设计：dev 使用 `data/dev/sqlite/app.db`；test 使用 `data/test/sqlite/app.db`，自动测试仍优先使用临时目录；prod 使用 MySQL，并通过 `PROD_MYSQL_*` 解析连接信息。
+- 新增测试：新增 `tests/test_config_manager.py`，覆盖默认 dev、合法/非法 APP_ENV、深度合并、缺失/非法 YAML、单 dotenv 加载、跨环境 sentinel 隔离、进程环境变量优先、dev/test SQLite 路径隔离、prod mysql 类型、prod 缺失 MySQL 配置失败且不泄露测试密钥、缓存重置后连续切换环境。
+- 发现并修复的真实缺陷：prod 使用 `PROD_MYSQL_*` 时，旧版 MySQL 环境解析会使用通用 `EnvSettings` 默认值作为回退，可能掩盖缺失的生产主机/用户/数据库变量；已改为只有旧 `MYSQL_*` 名称才使用旧默认值，环境专属变量必须显式提供。
+- 文档更新：README 增加多环境配置、`.env.dev/.env.test/.env.prod` 创建方式、PowerShell/POSIX 切换命令、迁移旧 `.env`、清理 `APP_ENV`、三环境差异和 prod 要求；architecture 增加配置加载顺序、深合并规则、dotenv 选择、进程环境变量优先级、数据源/密钥隔离和 prod 不回退原则。
+- 自动验证结果：以最终报告中的真实命令输出为准；默认测试不调用真实 LLM，不连接真实生产数据库。
+- dev 人工验证事项：准备 `.env.dev` 后运行初始化、TUI 创建用户、发起对话和导出会话。
+- prod 人工验证事项：准备 `.env.prod`、可用 MySQL 和生产模型配置后，运行初始化和核心功能冒烟；本次不伪造真实 MySQL 或 LLM 验收。
+- 未通过或未验证项：未执行真实 LLM 调用；未连接真实 MySQL；未进行交互式 TUI 全流程人工验收。
+- 建议 commit：`feat: step 15 - add isolated environment configuration`
+- 建议 tag：`step-15-envs`，仅在 dev/test/prod 正式验收全部完成后创建。

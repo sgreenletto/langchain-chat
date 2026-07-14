@@ -33,6 +33,7 @@ def test_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig:
             "name": "langchain-chat",
             "version": "0.1.0",
             "current_step": "Step 13 core module tests",
+            "env": "test",
         },
         llm={
             "default_model": "default",
@@ -103,6 +104,7 @@ def test_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig:
             model_name="unit-default-model",
         ),
         project_root=tmp_path,
+        app_env="test",
     )
 
 

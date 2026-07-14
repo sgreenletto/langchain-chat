@@ -44,6 +44,15 @@ async def async_main() -> None:
     chat_engine = None
     try:
         config = get_config()
+        logger.info(
+            "Configuration loaded",
+            extra={
+                "app_env": config.app_env,
+                "config_files": [path.name for path in config.config_files],
+                "storage_type": config.storage.type,
+                "status": "ok",
+            },
+        )
     except ConfigError as exc:
         logger.error(
             "Configuration load failed",

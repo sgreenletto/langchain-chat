@@ -1,11 +1,9 @@
-# Step 15 扩展策略：
-# 最终配置 = config.yaml + config.{APP_ENV}.yaml
-# Step 1 仅提供基础业务配置，不实现多环境配置加载。
-
+﻿# Shared base configuration.
+# Final runtime config = config.yaml + config.{APP_ENV}.yaml + environment variables.
 app:
   name: langchain-chat
   version: 0.1.0
-  current_step: "Step 14 README、架构文档与扩展预留"
+  current_step: "Step 15 多环境配置区分"
 
 llm:
   default_model: default
@@ -17,7 +15,7 @@ llm:
       api_base_url_env: API_BASE_URL
       api_key_env: API_KEY
       provider: example
-      description: 默认教学示例模型，占位用途。
+      description: 共享占位模型；实际运行由环境覆盖文件指定变量名。
     - alias: reasoning
       display_name: 推理模型
       model: example-reasoning-model
@@ -25,7 +23,7 @@ llm:
       api_base_url_env: REASONING_API_BASE_URL
       api_key_env: REASONING_API_KEY
       provider: example
-      description: 后续多模型切换示例，占位用途。
+      description: 共享占位推理模型；实际运行由环境覆盖文件指定变量名。
   temperature: 0.7
   max_tokens: 2048
   timeout: 30

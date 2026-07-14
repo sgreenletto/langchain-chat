@@ -1,5 +1,8 @@
 """Configuration loading and validation for langchain-chat."""
 
+from __future__ import annotations
+
+import copy
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -10,13 +13,15 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+ALLOWED_APP_ENVS = frozenset({"dev", "test", "prod"})
+
 
 class ConfigError(RuntimeError):
     """Raised when application configuration cannot be loaded."""
 
 
 class EnvSettings(BaseSettings):
-    """Environment variables used by later steps."""
+    """Environment variables used by runtime configuration."""
 
     api_base_url: str = "https://api.example.com/v1"
     api_key: str = "your_api_key_here"
@@ -27,17 +32,14 @@ class EnvSettings(BaseSettings):
     mysql_password: str = "your_mysql_password_here"
     mysql_database: str = "langchain_chat"
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(extra="ignore")
 
 
 class AppSection(BaseModel):
     name: str
     version: str
-    current_step: str = "Step 6  对话引擎"
+    current_step: str = "Step 15 多环境配置区分"
+    env: str = "dev"
 
 
 class ModelRegistryItem(BaseModel):
@@ -136,6 +138,9 @@ class AppConfig(BaseModel):
     export: ExportSection
     env: EnvSettings
     project_root: Path
+    app_env: str
+    config_files: tuple[Path, ...] = Field(default_factory=tuple)
+    env_file: Path | None = None
 
     @property
     def current_step(self) -> str:
@@ -236,7 +241,7 @@ class AppConfig(BaseModel):
             missing_env_vars=missing_env_vars,
         )
         if require_available and not runtime.available:
-            missing = "、".join(runtime.missing_env_vars)
+            missing = ", ".join(runtime.missing_env_vars)
             raise ConfigError(f"模型 '{alias}' 缺少必要环境变量：{missing}")
         return runtime
 
@@ -266,11 +271,38 @@ class AppConfig(BaseModel):
     def get_mysql_config(self, *, require_available: bool = True) -> MySQLRuntimeConfig:
         """Return MySQL connection settings resolved from environment variables."""
         mysql = self.storage.mysql
-        host = self._read_env(mysql.host_env, self.env.mysql_host)
-        port_raw = self._read_env(mysql.port_env, str(self.env.mysql_port))
-        user = self._read_env(mysql.user_env, self.env.mysql_user)
-        password = self._read_env(mysql.password_env, self.env.mysql_password)
-        database = self._read_env(mysql.database_env, self.env.mysql_database)
+        host = self._read_env(
+            mysql.host_env,
+            self._env_fallback(mysql.host_env, "MYSQL_HOST", self.env.mysql_host),
+        )
+        port_raw = self._read_env(
+            mysql.port_env,
+            self._env_fallback(
+                mysql.port_env,
+                "MYSQL_PORT",
+                str(self.env.mysql_port),
+            ),
+        )
+        user = self._read_env(
+            mysql.user_env,
+            self._env_fallback(mysql.user_env, "MYSQL_USER", self.env.mysql_user),
+        )
+        password = self._read_env(
+            mysql.password_env,
+            self._env_fallback(
+                mysql.password_env,
+                "MYSQL_PASSWORD",
+                self.env.mysql_password,
+            ),
+        )
+        database = self._read_env(
+            mysql.database_env,
+            self._env_fallback(
+                mysql.database_env,
+                "MYSQL_DATABASE",
+                self.env.mysql_database,
+            ),
+        )
         missing = [
             env_name
             for env_name, value in (
@@ -282,13 +314,14 @@ class AppConfig(BaseModel):
             )
             if self._is_placeholder(value)
         ]
+        if require_available and missing:
+            raise ConfigError(f"MySQL 缺少必要环境变量：{', '.join(missing)}")
+
         try:
             port = int(port_raw)
         except ValueError as exc:
             raise ConfigError(f"MySQL 端口必须是整数：{mysql.port_env}") from exc
 
-        if require_available and missing:
-            raise ConfigError(f"MySQL 缺少必要环境变量：{'、'.join(missing)}")
         if mysql.pool_min_size > mysql.pool_max_size:
             raise ConfigError("MySQL 连接池最小连接数不能大于最大连接数。")
 
@@ -323,6 +356,10 @@ class AppConfig(BaseModel):
     def _read_env(env_name: str, fallback: str) -> str:
         return os.getenv(env_name, fallback).strip()
 
+    @staticmethod
+    def _env_fallback(env_name: str, legacy_env_name: str, fallback: str) -> str:
+        return fallback if env_name == legacy_env_name else ""
+
     @classmethod
     def _missing_required_env_vars(
         cls,
@@ -353,6 +390,30 @@ class AppConfig(BaseModel):
         }
 
 
+def resolve_app_env(value: str | None = None) -> str:
+    """Return the normalized APP_ENV value or raise a clear config error."""
+    raw = os.getenv("APP_ENV") if value is None else value
+    app_env = (raw or "dev").strip().lower()
+    if not app_env:
+        app_env = "dev"
+    if app_env not in ALLOWED_APP_ENVS:
+        allowed = ", ".join(sorted(ALLOWED_APP_ENVS))
+        raise ConfigError(f"APP_ENV 只能是 {allowed}，当前值为：{raw!r}")
+    return app_env
+
+
+def deep_merge_config(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge two config mappings without mutating either input."""
+    merged = copy.deepcopy(base)
+    for key, override_value in override.items():
+        base_value = merged.get(key)
+        if isinstance(base_value, dict) and isinstance(override_value, dict):
+            merged[key] = deep_merge_config(base_value, override_value)
+        else:
+            merged[key] = copy.deepcopy(override_value)
+    return merged
+
+
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -374,28 +435,53 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
+def _ensure_matching_app_env(raw_config: dict[str, Any], app_env: str) -> None:
+    raw_app = raw_config.get("app", {})
+    if not isinstance(raw_app, dict):
+        raise ConfigError("配置字段 app 必须是映射结构。")
+    configured_env = str(raw_app.get("env", app_env)).strip().lower()
+    if configured_env != app_env:
+        raise ConfigError(
+            f"配置文件 app.env={configured_env!r} 与 APP_ENV={app_env!r} 不一致。"
+        )
+
+
+def reset_config_cache() -> None:
+    """Clear cached configuration; intended for tests that switch APP_ENV."""
+    get_config.cache_clear()
+
+
 @lru_cache(maxsize=1)
 def get_config() -> AppConfig:
-    """Load `.env` and `config.yaml`, then return a validated config object."""
+    """Load base config, environment override and the matching dotenv file."""
     root = _project_root()
-    env_path = root / ".env"
-    config_path = root / "config.yaml"
+    app_env = resolve_app_env()
+    base_config_path = root / "config.yaml"
+    env_config_path = root / f"config.{app_env}.yaml"
+    env_path = root / f".env.{app_env}"
 
-    load_dotenv(env_path)
-    raw_config = _load_yaml(config_path)
+    load_dotenv(env_path, override=False)
+
+    raw_base_config = _load_yaml(base_config_path)
+    raw_env_config = _load_yaml(env_config_path)
+    _ensure_matching_app_env(raw_env_config, app_env)
+    raw_config = deep_merge_config(raw_base_config, raw_env_config)
+    raw_config.setdefault("app", {})["env"] = app_env
 
     try:
-        env_settings = EnvSettings(_env_file=env_path if env_path.exists() else None)
         config = AppConfig(
             **raw_config,
-            env=env_settings,
+            env=EnvSettings(_env_file=None),
             project_root=root,
+            app_env=app_env,
+            config_files=(base_config_path, env_config_path),
+            env_file=env_path if env_path.exists() else None,
         )
-        config.get_default_model_config()
+        config.get_default_model_config(require_available=app_env == "prod")
         if config.storage.type == "mysql":
             config.get_mysql_config(require_available=True)
         return config
     except ValidationError as exc:
         raise ConfigError(
-            "配置校验失败，请检查 config.yaml 和 .env.example 中的字段。"
+            "配置校验失败，请检查 config.yaml、环境覆盖文件和 .env.example 中的字段。"
         ) from exc

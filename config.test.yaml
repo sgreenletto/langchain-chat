@@ -1,0 +1,36 @@
+﻿app:
+  env: test
+
+llm:
+  default_model: default
+  available_models:
+    - alias: default
+      display_name: 测试模型
+      model: test-chat-model
+      model_env: TEST_MODEL_NAME
+      api_base_url_env: TEST_API_BASE_URL
+      api_key_env: TEST_API_KEY
+      provider: test
+      description: 测试环境占位模型，自动测试禁止真实调用。
+    - alias: reasoning
+      display_name: 测试推理模型
+      model: test-reasoning-model
+      model_env: TEST_REASONING_MODEL_NAME
+      api_base_url_env: TEST_REASONING_API_BASE_URL
+      api_key_env: TEST_REASONING_API_KEY
+      provider: test
+      description: 测试环境推理模型占位。
+  temperature: 0.0
+  max_tokens: 512
+  timeout: 10
+  max_retries: 1
+
+storage:
+  type: sqlite
+  sqlite:
+    database_path: data/test/sqlite/app.db
+  file:
+    path: data/test/filestore
+
+export:
+  dir: data/test/users/{username}/exports

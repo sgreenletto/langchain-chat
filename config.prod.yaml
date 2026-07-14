@@ -1,0 +1,39 @@
+﻿app:
+  env: prod
+
+llm:
+  default_model: default
+  available_models:
+    - alias: default
+      display_name: 生产模型
+      model: your_prod_model_name_here
+      model_env: PROD_MODEL_NAME
+      api_base_url_env: PROD_API_BASE_URL
+      api_key_env: PROD_API_KEY
+      provider: prod
+      description: 生产环境默认模型，必须由 .env.prod 或进程环境变量提供。
+    - alias: reasoning
+      display_name: 生产推理模型
+      model: your_prod_reasoning_model_name_here
+      model_env: PROD_REASONING_MODEL_NAME
+      api_base_url_env: PROD_REASONING_API_BASE_URL
+      api_key_env: PROD_REASONING_API_KEY
+      provider: prod
+      description: 生产环境推理模型，按需配置。
+  temperature: 0.7
+  timeout: 30
+  max_retries: 3
+
+storage:
+  type: mysql
+  mysql:
+    host_env: PROD_MYSQL_HOST
+    port_env: PROD_MYSQL_PORT
+    user_env: PROD_MYSQL_USER
+    password_env: PROD_MYSQL_PASSWORD
+    database_env: PROD_MYSQL_DATABASE
+    pool_min_size: 2
+    pool_max_size: 10
+
+export:
+  dir: data/prod/users/{username}/exports

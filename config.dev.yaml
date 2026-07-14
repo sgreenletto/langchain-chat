@@ -1,0 +1,35 @@
+﻿app:
+  env: dev
+
+llm:
+  default_model: default
+  available_models:
+    - alias: default
+      display_name: 开发模型
+      model: dev-chat-model
+      model_env: DEV_MODEL_NAME
+      api_base_url_env: DEV_API_BASE_URL
+      api_key_env: DEV_API_KEY
+      provider: dev
+      description: 开发环境默认模型。
+    - alias: reasoning
+      display_name: 开发推理模型
+      model: dev-reasoning-model
+      model_env: DEV_REASONING_MODEL_NAME
+      api_base_url_env: DEV_REASONING_API_BASE_URL
+      api_key_env: DEV_REASONING_API_KEY
+      provider: dev
+      description: 开发环境推理模型。
+  temperature: 0.7
+  timeout: 30
+  max_retries: 2
+
+storage:
+  type: sqlite
+  sqlite:
+    database_path: data/dev/sqlite/app.db
+  file:
+    path: data/dev/filestore
+
+export:
+  dir: data/dev/users/{username}/exports

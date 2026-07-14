@@ -96,9 +96,16 @@ class MySQLBackend(StorageBackend):
                 now,
             ),
         )
-        saved = await self.get_user_by_id(int(lastrowid))
+        saved = None
+        if lastrowid is not None and lastrowid > 0:
+            saved = await self.get_user_by_id(int(lastrowid))
         if saved is None:
-            raise RuntimeError("创建用户后无法读取数据库记录。")
+            saved = await self.get_user_by_username(user.username)
+        if saved is None:
+            raise RuntimeError(
+                f"创建用户后无法读取数据库记录：username={user.username!r}, "
+                f"lastrowid={lastrowid}"
+            )
         return saved
 
     async def get_user_by_id(self, user_id: int) -> User | None:
@@ -175,6 +182,8 @@ class MySQLBackend(StorageBackend):
                 now,
             ),
         )
+        if lastrowid is None or lastrowid <= 0:
+            raise RuntimeError(f"创建会话后无法获取插入 ID：lastrowid={lastrowid}")
         saved = await self.get_session(int(lastrowid))
         if saved is None:
             raise RuntimeError("创建会话后无法读取数据库记录。")
@@ -260,6 +269,8 @@ class MySQLBackend(StorageBackend):
                 self._datetime_to_iso(message.created_at),
             ),
         )
+        if lastrowid is None or lastrowid <= 0:
+            raise RuntimeError(f"创建消息后无法获取插入 ID：lastrowid={lastrowid}")
         row = await self._fetchone(
             "SELECT * FROM messages WHERE id = %s",
             (int(lastrowid),),
@@ -329,7 +340,15 @@ class MySQLBackend(StorageBackend):
                     now,
                 ),
             )
-            saved = await self.get_preset_by_id(int(lastrowid))
+            saved = None
+            if lastrowid is not None and lastrowid > 0:
+                saved = await self.get_preset_by_id(int(lastrowid))
+            if saved is None:
+                saved = await self._get_preset_by_scope_and_name(
+                    preset.user_id,
+                    preset.name,
+                    preset.is_builtin,
+                )
             if saved is None:
                 raise RuntimeError("创建预设后无法读取数据库记录。")
             return saved
@@ -366,6 +385,39 @@ class MySQLBackend(StorageBackend):
     async def get_preset(self, preset_id: int) -> Preset | None:
         """Return a preset by id."""
         return await self.get_preset_by_id(preset_id)
+
+    async def _get_preset_by_scope_and_name(
+        self,
+        user_id: int | None,
+        name: str,
+        is_builtin: bool,
+    ) -> Preset | None:
+        """Return the newest matching preset using NULL-safe user scope."""
+        if user_id is None:
+            row = await self._fetchone(
+                """
+                SELECT * FROM presets
+                WHERE user_id IS NULL
+                  AND name = %s
+                  AND is_builtin = %s
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (name, self._bool_to_int(is_builtin)),
+            )
+        else:
+            row = await self._fetchone(
+                """
+                SELECT * FROM presets
+                WHERE user_id = %s
+                  AND name = %s
+                  AND is_builtin = %s
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (user_id, name, self._bool_to_int(is_builtin)),
+            )
+        return self._row_to_preset(row) if row else None
 
     async def list_presets(self, user_id: int | None = None) -> list[Preset]:
         """List built-in presets and optional user presets."""
@@ -526,7 +578,7 @@ class MySQLBackend(StorageBackend):
                 name VARCHAR(191) NOT NULL,
                 description TEXT NOT NULL,
                 system_prompt LONGTEXT NOT NULL,
-                is_builtin TINYINT(1) NOT NULL DEFAULT 0,
+                is_builtin TINYINT NOT NULL DEFAULT 0,
                 created_at VARCHAR(64) NOT NULL,
                 updated_at VARCHAR(64) NOT NULL,
                 CONSTRAINT fk_presets_user_id
@@ -673,10 +725,16 @@ class MySQLBackend(StorageBackend):
     async def _execute_schema(self, sql: str) -> None:
         await self._with_cursor(lambda cursor: cursor.execute(sql))
 
-    async def _execute_write(self, sql: str, parameters: tuple[Any, ...]) -> int:
-        async def operation(cursor: aiomysql.DictCursor) -> int:
+    async def _execute_write(
+        self,
+        sql: str,
+        parameters: tuple[Any, ...],
+    ) -> int | None:
+        async def operation(cursor: aiomysql.DictCursor) -> int | None:
             await cursor.execute(sql, parameters)
-            return int(cursor.lastrowid or 0)
+            if cursor.lastrowid is None:
+                return None
+            return int(cursor.lastrowid)
 
         return await self._with_cursor(operation)
 
@@ -693,9 +751,15 @@ class MySQLBackend(StorageBackend):
         parameters: tuple[Any, ...] = (),
     ) -> dict[str, Any] | None:
         async with self._acquire() as connection:
-            async with connection.cursor() as cursor:
-                await cursor.execute(sql, parameters)
-                return await cursor.fetchone()
+            try:
+                async with connection.cursor() as cursor:
+                    await cursor.execute(sql, parameters)
+                    row = await cursor.fetchone()
+                await connection.commit()
+                return row
+            except Exception:
+                await connection.rollback()
+                raise
 
     async def _fetchall(
         self,
@@ -703,10 +767,15 @@ class MySQLBackend(StorageBackend):
         parameters: tuple[Any, ...] = (),
     ) -> list[dict[str, Any]]:
         async with self._acquire() as connection:
-            async with connection.cursor() as cursor:
-                await cursor.execute(sql, parameters)
-                rows = await cursor.fetchall()
+            try:
+                async with connection.cursor() as cursor:
+                    await cursor.execute(sql, parameters)
+                    rows = await cursor.fetchall()
+                await connection.commit()
                 return list(rows)
+            except Exception:
+                await connection.rollback()
+                raise
 
     async def _with_cursor(
         self,

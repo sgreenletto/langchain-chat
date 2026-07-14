@@ -83,6 +83,7 @@ def make_test_config(tmp_path: Path) -> AppConfig:
             model_name="test-default-model",
         ),
         project_root=tmp_path,
+        app_env="test",
     )
 
 
